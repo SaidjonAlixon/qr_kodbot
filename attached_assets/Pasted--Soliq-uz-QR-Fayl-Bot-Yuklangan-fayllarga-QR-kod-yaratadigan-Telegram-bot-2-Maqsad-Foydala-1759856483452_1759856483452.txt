@@ -1,0 +1,95 @@
+“Soliq.uz QR Fayl Bot” — Yuklangan fayllarga QR-kod yaratadigan Telegram bot
+
+🟩 2. Maqsad:
+
+Foydalanuvchi Telegram botga PDF, Word, Excel, JPG va boshqa fayllarni yuborganida:
+
+Faylni serverga yuklab, doimiy havola (link) hosil qilish
+
+Ushbu havolaga asoslangan QR-kod yaratish
+
+QR-kodni foydalanuvchiga yuborish
+
+QR skanerlansa — fayl “soliq.uz” nomi ostida ochiladi
+
+🟩 3. Foydalanuvchi interfeysi (UI):
+Telegram Bot Tugmalari (Inline Buttonlar):
+
+📤 Fayl yuborish
+
+🧾 Bot haqida
+
+📞 Aloqa
+
+Javob formatlari:
+
+Fayl yuborilgach:
+
+✅ Faylingiz muvaffaqiyatli yuklandi. Quyidagi QR-kodni skaner qiling yoki havolani bosing:
+
+🔗 Faylga havola
+
+📎 QR-kod: (rasm sifatida yuboriladi)
+
+🟩 4. Texnik funksionallik:
+1. Fayl qabul qilish:
+
+.pdf, .docx, .xlsx, .jpg, .png, .zip formatlarni qo‘llab-quvvatlash
+
+Fayl hajmi maksimal 20MB
+
+2. Serverga yuklash:
+
+Fayllarni uploads/ papkasiga saqlash yoki CDN orqali havola yaratish
+
+Faylga random nom berish (uuid4 orqali)
+
+3. Fayl havolasini yaratish:
+
+Masalan: https://soliq.uz/files/{filename}
+
+4. QR-kod generatsiyasi:
+
+Python’da qrcode kutubxonasi orqali
+
+QR-kod ichida yuqoridagi fayl havolasi bo‘ladi
+
+5. QR-kodni rasm sifatida yuborish
+6. Brendlash:
+
+Havola va QR dizayni soliq.uz nomi ostida bo‘lishi shart
+
+🟩 5. Texnologiyalar:
+Bo‘lim	Texnologiya
+Telegram API	python-telegram-bot
+Fayl saqlash	Server (Localhost yoki cloud)
+QR kod yaratish	qrcode, Pillow
+Fayl hosting	Flask yoki FastAPI orqali statik fayl xizmati
+Server joylashuvi	VDS/VPS yoki Render, Railway
+Fayl nomi	UUID4 (tasodifiy)
+Bot nomi	@soliq_qr_bot (misol uchun)
+🟩 6. Qurilish bosqichlari:
+
+✅ Telegram Bot Token olish (@BotFather orqali)
+
+✅ Faylni qabul qiladigan handler yozish
+
+✅ Faylni serverga yuklab, unga havola hosil qilish
+
+✅ Havoladan QR-kod generatsiya qilish
+
+✅ QR-kodni foydalanuvchiga rasm ko‘rinishida yuborish
+
+✅ Tugmalar orqali interfeys boshqaruvi
+
+✅ Xatoliklar uchun javoblar qo‘shish
+
+✅ Fayllarni avtomatik tozalovchi (crontab orqali) tizim
+
+🟩 7. Xavfsizlik:
+
+Fayl nomlarini random qilish
+
+Fayllarga maxfiy token qo‘shish (agar kerak bo‘lsa)
+
+Antivirüs tekshiruvi (ixtiyoriy)
