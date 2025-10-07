@@ -2,8 +2,16 @@ import os
 import uuid
 import qrcode
 import io
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.error import BadRequest, Conflict
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 UPLOAD_FOLDER = 'uploads'
 QR_FOLDER = 'qr_codes'
@@ -66,8 +74,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📊 Taqdimotlar: PPTX, PPT\n\n"
             "⚠️ Maksimal hajm: 20MB"
         )
-        await query.edit_message_text(text, parse_mode='HTML', reply_markup=create_main_keyboard())
-    
     elif query.data == 'about':
         text = (
             "🧾 <b>Bot haqida</b>\n\n"
@@ -78,8 +84,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚡ Tez va qulay xizmat\n"
             "🆓 Bepul foydalanish"
         )
-        await query.edit_message_text(text, parse_mode='HTML', reply_markup=create_main_keyboard())
-    
     elif query.data == 'contact':
         text = (
             "📞 <b>Aloqa</b>\n\n"
@@ -88,7 +92,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🌐 Website: https://soliq.uz\n"
             "📱 Telegram: @soliq_support"
         )
+    else:
+        return
+    
+    try:
         await query.edit_message_text(text, parse_mode='HTML', reply_markup=create_main_keyboard())
+    except BadRequest as e:
+        if "message is not modified" in str(e).lower():
+            logger.info("Xabar allaqachon bir xil, o'zgartirish kerak emas")
+        else:
+            logger.error(f"Tugma bosilishida xatolik: {e}")
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle document uploads"""
@@ -221,6 +234,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=create_main_keyboard()
         )
 
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle errors in the bot"""
+    logger.error(f"Xatolik yuz berdi: {context.error}")
+    
+    if isinstance(context.error, Conflict):
+        logger.warning("Conflict xatoligi: Bir nechta bot nusxasi ishlayotgan bo'lishi mumkin")
+        return
+    
+    try:
+        if update and update.effective_message:
+            await update.effective_message.reply_text(
+                "❌ Uzr, xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.",
+                reply_markup=create_main_keyboard()
+            )
+    except Exception as e:
+        logger.error(f"Xatolik xabarini yuborishda muammo: {e}")
+
 def main():
     """Main function to run the bot"""
     bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -237,8 +267,10 @@ def main():
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     
+    application.add_error_handler(error_handler)
+    
     print("🤖 Bot ishga tushdi! Fayllarni qabul qilish uchun tayyor...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
