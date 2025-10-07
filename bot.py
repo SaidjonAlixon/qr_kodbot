@@ -3,6 +3,9 @@ import uuid
 import qrcode
 import io
 import logging
+import subprocess
+from pdf2docx import Converter
+from docx import Document
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.error import BadRequest, Conflict
@@ -37,8 +40,18 @@ def create_main_keyboard():
     """Create main inline keyboard"""
     keyboard = [
         [InlineKeyboardButton("📤 Fayl yuborish", callback_data='upload')],
+        [InlineKeyboardButton("🔄 PDF ↔ Word", callback_data='convert_menu')],
         [InlineKeyboardButton("🧾 Bot haqida", callback_data='about')],
         [InlineKeyboardButton("📞 Aloqa", callback_data='contact')]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def create_convert_keyboard():
+    """Create conversion menu keyboard"""
+    keyboard = [
+        [InlineKeyboardButton("📄 PDF → Word", callback_data='pdf_to_word')],
+        [InlineKeyboardButton("📝 Word → PDF", callback_data='word_to_pdf')],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -74,16 +87,54 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📊 Taqdimotlar: PPTX, PPT\n\n"
             "⚠️ Maksimal hajm: 20MB"
         )
+        keyboard = create_main_keyboard()
+    elif query.data == 'convert_menu':
+        text = (
+            "🔄 <b>PDF ↔ Word Konvertatsiya</b>\n\n"
+            "Quyidagi konvertatsiya turlaridan birini tanlang:\n\n"
+            "📄 <b>PDF → Word</b>\n"
+            "PDF faylni DOCX formatiga o'zgartirish\n\n"
+            "📝 <b>Word → PDF</b>\n"
+            "DOCX faylni PDF formatiga o'zgartirish\n\n"
+            "⚠️ Maksimal hajm: 20MB"
+        )
+        keyboard = create_convert_keyboard()
+    elif query.data == 'pdf_to_word':
+        context.user_data['convert_mode'] = 'pdf_to_word'
+        text = (
+            "📄 <b>PDF → Word</b>\n\n"
+            "Iltimos PDF faylni yuboring.\n"
+            "Fayl DOCX formatiga o'zgartiriladi.\n\n"
+            "⚠️ Maksimal hajm: 20MB"
+        )
+        keyboard = create_convert_keyboard()
+    elif query.data == 'word_to_pdf':
+        context.user_data['convert_mode'] = 'word_to_pdf'
+        text = (
+            "📝 <b>Word → PDF</b>\n\n"
+            "Iltimos DOCX yoki DOC faylni yuboring.\n"
+            "Fayl PDF formatiga o'zgartiriladi.\n\n"
+            "⚠️ Maksimal hajm: 20MB"
+        )
+        keyboard = create_convert_keyboard()
+    elif query.data == 'back_to_main':
+        context.user_data['convert_mode'] = None
+        text = (
+            "🌟 <b>Soliq.uz QR Fayl Bot</b>\n\n"
+            "Quyidagi tugmalardan birini tanlang:"
+        )
+        keyboard = create_main_keyboard()
     elif query.data == 'about':
         text = (
             "🧾 <b>Bot haqida</b>\n\n"
-            "Soliq.uz QR Fayl Bot - bu fayllaringiz uchun QR-kod yaratuvchi xizmat.\n\n"
-            "Bot fayllaringizni xavfsiz saqlaydi va har bir fayl uchun QR-kod yaratadi. "
-            "QR-kodni skaner qilish orqali faylni osongina yuklab olish mumkin.\n\n"
+            "Soliq.uz QR Fayl Bot - bu fayllaringiz uchun QR-kod yaratuvchi va "
+            "PDF/Word konvertatsiya xizmati.\n\n"
+            "🔄 PDF va Word formatlarini o'zgartiring\n"
             "🔒 Fayllaringiz xavfsiz saqlanadi\n"
             "⚡ Tez va qulay xizmat\n"
             "🆓 Bepul foydalanish"
         )
+        keyboard = create_main_keyboard()
     elif query.data == 'contact':
         text = (
             "📞 <b>Aloqa</b>\n\n"
@@ -92,16 +143,56 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🌐 Website: https://soliq.uz\n"
             "📱 Telegram: @soliq_support"
         )
+        keyboard = create_main_keyboard()
     else:
         return
     
     try:
-        await query.edit_message_text(text, parse_mode='HTML', reply_markup=create_main_keyboard())
+        await query.edit_message_text(text, parse_mode='HTML', reply_markup=keyboard)
     except BadRequest as e:
         if "message is not modified" in str(e).lower():
             logger.info("Xabar allaqachon bir xil, o'zgartirish kerak emas")
         else:
             logger.error(f"Tugma bosilishida xatolik: {e}")
+
+async def convert_pdf_to_word(pdf_path, docx_path):
+    """Convert PDF to Word using pdf2docx"""
+    try:
+        cv = Converter(pdf_path)
+        cv.convert(docx_path)
+        cv.close()
+        return True
+    except Exception as e:
+        logger.error(f"PDF to Word konvertatsiya xatoligi: {e}")
+        return False
+
+async def convert_word_to_pdf(docx_path, pdf_path):
+    """Convert Word to PDF using LibreOffice"""
+    try:
+        output_dir = os.path.dirname(pdf_path)
+        soffice_path = subprocess.run(
+            ['which', 'soffice'],
+            capture_output=True,
+            text=True
+        ).stdout.strip() or '/nix/store/s77ki6j3if918jk373md4aajqii531rd-libreoffice-24.8.7.2-wrapped/bin/soffice'
+        
+        result = subprocess.run(
+            [soffice_path, '--headless', '--convert-to', 'pdf', '--outdir', output_dir, docx_path],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode == 0:
+            return True
+        else:
+            logger.error(f"LibreOffice xatoligi: {result.stderr}")
+            return False
+    except subprocess.TimeoutExpired:
+        logger.error("Word to PDF konvertatsiya vaqti tugadi")
+        return False
+    except Exception as e:
+        logger.error(f"Word to PDF konvertatsiya xatoligi: {e}")
+        return False
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle document uploads"""
@@ -116,6 +207,111 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     file_extension = document.file_name.split('.')[-1].lower()
+    convert_mode = context.user_data.get('convert_mode')
+    
+    if convert_mode == 'pdf_to_word':
+        if file_extension != 'pdf':
+            await message.reply_text(
+                "❌ Xatolik: Iltimos PDF fayl yuboring!",
+                reply_markup=create_convert_keyboard()
+            )
+            return
+        
+        status_message = await message.reply_text("⏳ PDF Word ga o'zgartrilmoqda...")
+        
+        pdf_path = None
+        docx_path = None
+        try:
+            file = await context.bot.get_file(document.file_id)
+            unique_id = str(uuid.uuid4())
+            pdf_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.pdf")
+            docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.docx")
+            
+            await file.download_to_drive(pdf_path)
+            
+            success = await convert_pdf_to_word(pdf_path, docx_path)
+            
+            if success and os.path.exists(docx_path):
+                await status_message.edit_text("✅ Konvertatsiya muvaffaqiyatli!")
+                
+                with open(docx_path, 'rb') as docx_file:
+                    await message.reply_document(
+                        document=docx_file,
+                        filename=f"{os.path.splitext(document.file_name)[0]}.docx",
+                        caption="✅ PDF Word formatiga o'zgartirildi\n🌐 Soliq.uz",
+                        reply_markup=create_convert_keyboard()
+                    )
+                context.user_data['convert_mode'] = None
+            else:
+                await status_message.edit_text(
+                    "❌ Konvertatsiya xatoligi. Iltimos qaytadan urinib ko'ring.",
+                    reply_markup=create_convert_keyboard()
+                )
+        except Exception as e:
+            logger.error(f"PDF to Word handler xatoligi: {e}")
+            await status_message.edit_text(
+                f"❌ Xatolik yuz berdi: {str(e)}",
+                reply_markup=create_convert_keyboard()
+            )
+        finally:
+            if pdf_path and os.path.exists(pdf_path):
+                os.remove(pdf_path)
+            if docx_path and os.path.exists(docx_path):
+                os.remove(docx_path)
+        return
+    
+    elif convert_mode == 'word_to_pdf':
+        if file_extension not in ['docx', 'doc']:
+            await message.reply_text(
+                "❌ Xatolik: Iltimos DOCX yoki DOC fayl yuboring!",
+                reply_markup=create_convert_keyboard()
+            )
+            return
+        
+        status_message = await message.reply_text("⏳ Word PDF ga o'zgartrilmoqda...")
+        
+        docx_path = None
+        pdf_path = None
+        try:
+            file = await context.bot.get_file(document.file_id)
+            unique_id = str(uuid.uuid4())
+            docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}.{file_extension}")
+            pdf_filename = f"{unique_id}.pdf"
+            pdf_path = os.path.join(UPLOAD_FOLDER, pdf_filename)
+            
+            await file.download_to_drive(docx_path)
+            
+            success = await convert_word_to_pdf(docx_path, pdf_path)
+            
+            if success and os.path.exists(pdf_path):
+                await status_message.edit_text("✅ Konvertatsiya muvaffaqiyatli!")
+                
+                with open(pdf_path, 'rb') as pdf_file:
+                    await message.reply_document(
+                        document=pdf_file,
+                        filename=f"{os.path.splitext(document.file_name)[0]}.pdf",
+                        caption="✅ Word PDF formatiga o'zgartirildi\n🌐 Soliq.uz",
+                        reply_markup=create_convert_keyboard()
+                    )
+                context.user_data['convert_mode'] = None
+            else:
+                await status_message.edit_text(
+                    "❌ Konvertatsiya xatoligi. Iltimos qaytadan urinib ko'ring.",
+                    reply_markup=create_convert_keyboard()
+                )
+        except Exception as e:
+            logger.error(f"Word to PDF handler xatoligi: {e}")
+            await status_message.edit_text(
+                f"❌ Xatolik yuz berdi: {str(e)}",
+                reply_markup=create_convert_keyboard()
+            )
+        finally:
+            if docx_path and os.path.exists(docx_path):
+                os.remove(docx_path)
+            if pdf_path and os.path.exists(pdf_path):
+                os.remove(pdf_path)
+        return
+    
     if file_extension not in ALLOWED_EXTENSIONS:
         await message.reply_text(
             f"❌ Xatolik: '{file_extension}' formatidagi fayllar qo'llab-quvvatlanmaydi!",
