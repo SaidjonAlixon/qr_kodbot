@@ -226,7 +226,7 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
         for section in doc.sections:
             footer = section.footer
             footer_paragraph = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
-            footer_paragraph.text = '🌐 Soliq.uz - Fayllaringiz xavfsiz va qulay!'
+            footer_paragraph.text = 'DIDOX.UZ Orqali tasdiqlandi!'
             footer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
         # Save document
