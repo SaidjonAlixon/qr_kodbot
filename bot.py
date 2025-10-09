@@ -212,14 +212,24 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
     try:
         doc = Document(docx_path)
         
-        # Add QR code image at the end of document (right aligned, 1x1 inches)
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        paragraph = doc.add_paragraph()
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        run = paragraph.add_run()
-        run.add_picture(qr_image_path, width=Inches(1), height=Inches(1))
+        # Get last paragraph or create new one if document is empty
+        if len(doc.paragraphs) > 0:
+            # Add QR to the last existing paragraph (right side)
+            last_paragraph = doc.paragraphs[-1]
+            # Add tab to move to right side
+            last_paragraph.add_run('\t')
+            run = last_paragraph.add_run()
+            run.add_picture(qr_image_path, width=Inches(1), height=Inches(1))
+        else:
+            # If document is empty, create new paragraph
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            paragraph = doc.add_paragraph()
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            run = paragraph.add_run()
+            run.add_picture(qr_image_path, width=Inches(1), height=Inches(1))
         
         # Add footer to the document (all sections)
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
         for section in doc.sections:
             footer = section.footer
             footer_paragraph = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
