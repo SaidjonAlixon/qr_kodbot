@@ -6,7 +6,7 @@ import logging
 import subprocess
 from pdf2docx import Converter
 from docx import Document
-from docx.shared import Inches
+from docx.shared import Inches, Pt
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.error import BadRequest, Conflict
@@ -215,15 +215,18 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
         # Add page break before QR code
         doc.add_page_break()
         
-        # Add heading
-        doc.add_heading('📱 Faylga kirish QR kodi', level=1)
+        # Add heading as formatted paragraph (to avoid style issues)
+        heading_paragraph = doc.add_paragraph('📱 Faylga kirish QR kodi')
+        heading_paragraph.runs[0].bold = True
+        heading_paragraph.runs[0].font.size = Pt(18)
         
         # Add description
         doc.add_paragraph('Ushbu QR kodni skanerlash orqali faylga to\'g\'ridan-to\'g\'ri kirishingiz mumkin:')
         
         # Add QR code image (centered, 3 inch width)
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
         paragraph = doc.add_paragraph()
-        paragraph.alignment = 1  # Center alignment
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = paragraph.add_run()
         run.add_picture(qr_image_path, width=Inches(3))
         
@@ -232,7 +235,7 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
             footer = section.footer
             footer_paragraph = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
             footer_paragraph.text = '🌐 Soliq.uz - Fayllaringiz xavfsiz va qulay!'
-            footer_paragraph.alignment = 1  # Center alignment
+            footer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
         # Save document
         doc.save(output_path)
