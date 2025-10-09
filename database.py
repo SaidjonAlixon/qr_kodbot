@@ -37,6 +37,20 @@ def init_database():
         )
     ''')
     
+    # Migration: Add service_used column if it doesn't exist
+    try:
+        cursor.execute("PRAGMA table_info(files)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'service_used' not in columns:
+            cursor.execute('ALTER TABLE files ADD COLUMN service_used TEXT DEFAULT "file_upload"')
+            # Backfill existing records
+            cursor.execute('UPDATE files SET service_used = "file_upload" WHERE service_used IS NULL')
+            conn.commit()
+            print("✅ Migration: Added service_used column to files table")
+    except Exception as e:
+        print(f"⚠️ Migration warning: {e}")
+    
     conn.commit()
     conn.close()
 
