@@ -212,15 +212,12 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
     try:
         doc = Document(docx_path)
         
-        # Add page break before QR code
-        doc.add_page_break()
-        
-        # Add QR code image (centered, 3 inch width)
+        # Add QR code image at the end of document (centered, 3x4 inches)
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         paragraph = doc.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = paragraph.add_run()
-        run.add_picture(qr_image_path, width=Inches(3))
+        run.add_picture(qr_image_path, width=Inches(3), height=Inches(4))
         
         # Add footer to the document (all sections)
         for section in doc.sections:
