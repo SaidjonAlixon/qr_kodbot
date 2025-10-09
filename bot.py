@@ -4,6 +4,7 @@ import qrcode
 import io
 import logging
 import subprocess
+import fitz  # PyMuPDF
 from pdf2docx import Converter
 from docx import Document
 from docx.shared import Inches, Pt
@@ -43,6 +44,7 @@ def create_main_keyboard():
         [InlineKeyboardButton("📤 Fayl yuborish", callback_data='upload')],
         [InlineKeyboardButton("🔄 PDF ↔ Word", callback_data='convert_menu')],
         [InlineKeyboardButton("📋 Word faylga QR qo'shish", callback_data='add_qr_to_word')],
+        [InlineKeyboardButton("📄 PDF faylga QR qo'shish", callback_data='add_qr_to_pdf')],
         [InlineKeyboardButton("🧾 Bot haqida", callback_data='about')],
         [InlineKeyboardButton("📞 Aloqa", callback_data='contact')]
     ]
@@ -124,6 +126,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = (
             "📋 <b>Word faylga QR kod qo'shish</b>\n\n"
             "Iltimos DOCX yoki DOC faylni yuboring.\n"
+            "Fayl ichiga QR kod qo'shiladi va qaytariladi.\n\n"
+            "📱 QR kodni skanerlash orqali faylga kirish mumkin!\n\n"
+            "⚠️ Maksimal hajm: 20MB"
+        )
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]])
+    elif query.data == 'add_qr_to_pdf':
+        context.user_data['convert_mode'] = 'add_qr_to_pdf'
+        text = (
+            "📄 <b>PDF faylga QR kod qo'shish</b>\n\n"
+            "Iltimos PDF faylni yuboring.\n"
             "Fayl ichiga QR kod qo'shiladi va qaytariladi.\n\n"
             "📱 QR kodni skanerlash orqali faylga kirish mumkin!\n\n"
             "⚠️ Maksimal hajm: 20MB"
@@ -240,6 +252,42 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
         return True
     except Exception as e:
         logger.error(f"Word faylga QR qo'shish xatoligi: {e}")
+        return False
+
+async def add_qr_to_pdf_document(pdf_path, qr_image_path, output_path):
+    """Add QR code to PDF document"""
+    try:
+        # Open PDF
+        pdf_document = fitz.open(pdf_path)
+        
+        # Get last page
+        last_page = pdf_document[-1]
+        page_width = last_page.rect.width
+        page_height = last_page.rect.height
+        
+        # QR code size (1x1 inch = 72x72 points)
+        qr_size = 72
+        
+        # Position QR at bottom right (with 10pt margin)
+        qr_x = page_width - qr_size - 10
+        qr_y = page_height - qr_size - 10
+        
+        # Insert QR code image
+        qr_rect = fitz.Rect(qr_x, qr_y, qr_x + qr_size, qr_y + qr_size)
+        last_page.insert_image(qr_rect, filename=qr_image_path)
+        
+        # Add footer text
+        footer_text = "DIDOX.UZ Orqali tasdiqlandi!"
+        text_position = fitz.Point(page_width / 2, page_height - 5)
+        last_page.insert_text(text_position, footer_text, fontsize=10, 
+                             color=(0, 0, 0), fontname="helv")
+        
+        # Save PDF
+        pdf_document.save(output_path)
+        pdf_document.close()
+        return True
+    except Exception as e:
+        logger.error(f"PDF faylga QR qo'shish xatoligi: {e}")
         return False
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -472,6 +520,85 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 os.remove(qr_image_path)
             if output_docx_path and os.path.exists(output_docx_path):
                 os.remove(output_docx_path)
+        return
+    
+    elif convert_mode == 'add_qr_to_pdf':
+        if file_extension != 'pdf':
+            await message.reply_text(
+                "❌ Xatolik: Iltimos PDF fayl yuboring!",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]])
+            )
+            return
+        
+        status_message = await message.reply_text("⏳ PDF faylga QR kod qo'shilmoqda...")
+        
+        original_pdf_path = None
+        qr_image_path = None
+        output_pdf_path = None
+        try:
+            file = await context.bot.get_file(document.file_id)
+            unique_id = str(uuid.uuid4())
+            original_pdf_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_original.pdf")
+            output_pdf_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_with_qr.pdf")
+            qr_image_path = os.path.join(QR_FOLDER, f"{unique_id}.png")
+            
+            # Download original file
+            await file.download_to_drive(original_pdf_path)
+            
+            # Create permanent file link and QR code
+            permanent_filename = f"{uuid.uuid4()}.pdf"
+            permanent_file_path = os.path.join(UPLOAD_FOLDER, permanent_filename)
+            file_url = f"{get_base_url()}/files/{permanent_filename}"
+            
+            # Generate QR code
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(file_url)
+            qr.make(fit=True)
+            
+            img = qr.make_image(fill_color="black", back_color="white")
+            img.save(qr_image_path)
+            
+            # Add QR code to PDF document
+            success = await add_qr_to_pdf_document(original_pdf_path, qr_image_path, output_pdf_path)
+            
+            if success and os.path.exists(output_pdf_path):
+                await status_message.edit_text("✅ QR kod muvaffaqiyatli qo'shildi!")
+                
+                # Save the file with QR code as the permanent file
+                os.rename(output_pdf_path, permanent_file_path)
+                
+                # Send document with QR code
+                with open(permanent_file_path, 'rb') as pdf_file:
+                    await message.reply_document(
+                        document=pdf_file,
+                        filename=f"{os.path.splitext(document.file_name)[0]}_QR.pdf",
+                        caption=f"✅ PDF faylga QR kod qo'shildi!\n\n📥 Yuklab olish: {file_url}\n🌐 Soliq.uz",
+                        reply_markup=create_main_keyboard()
+                    )
+                context.user_data['convert_mode'] = None
+            else:
+                await status_message.edit_text(
+                    "❌ QR kod qo'shishda xatolik. Iltimos qaytadan urinib ko'ring.",
+                    reply_markup=create_main_keyboard()
+                )
+        except Exception as e:
+            logger.error(f"PDF faylga QR qo'shish handler xatoligi: {e}")
+            await status_message.edit_text(
+                f"❌ Xatolik yuz berdi: {str(e)}",
+                reply_markup=create_main_keyboard()
+            )
+        finally:
+            if original_pdf_path and os.path.exists(original_pdf_path):
+                os.remove(original_pdf_path)
+            if qr_image_path and os.path.exists(qr_image_path):
+                os.remove(qr_image_path)
+            if output_pdf_path and os.path.exists(output_pdf_path):
+                os.remove(output_pdf_path)
         return
     
     if file_extension not in ALLOWED_EXTENSIONS:
