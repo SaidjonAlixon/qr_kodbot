@@ -11,6 +11,13 @@ from docx.shared import Inches, Pt
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.error import BadRequest, Conflict
+from functools import wraps
+
+# Import database functions
+from database import (
+    add_or_update_user, is_user_allowed, set_user_permission,
+    get_all_users, add_file_record, get_all_files, get_stats
+)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -30,6 +37,42 @@ ALLOWED_EXTENSIONS = {
     'jpg', 'jpeg', 'png', 'gif', 'bmp',
     'zip', 'rar', '7z', 'txt', 'pptx', 'ppt'
 }
+
+# Get admin ID from environment
+ADMIN_ID = int(os.getenv('ADMIN_TELEGRAM_ID', 0))
+
+def is_admin(user_id: int) -> bool:
+    """Check if user is admin"""
+    return user_id == ADMIN_ID
+
+def require_permission(func):
+    """Decorator to check if user has permission"""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user = update.effective_user
+        user_id = user.id
+        
+        # Save/update user in database
+        username = user.username or "No username"
+        full_name = user.full_name or "No name"
+        add_or_update_user(user_id, username, full_name)
+        
+        # Admin always has access
+        if is_admin(user_id):
+            return await func(update, context, *args, **kwargs)
+        
+        # Check if user is allowed
+        if not is_user_allowed(user_id):
+            await update.effective_message.reply_text(
+                "❌ <b>Ruxsat yo'q!</b>\n\n"
+                "Botdan foydalanish uchun admin ruxsati kerak.\n"
+                "Iltimos admin bilan bog'laning.",
+                parse_mode='HTML'
+            )
+            return
+        
+        return await func(update, context, *args, **kwargs)
+    return wrapper
 
 def get_base_url():
     """Get the base URL for file hosting"""
@@ -61,16 +104,26 @@ def create_back_keyboard():
     """Create back button keyboard"""
     return InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]])
 
+@require_permission
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
+    user = update.effective_user
+    
+    # Show admin badge for admin
+    title = "🔱 <b>Admin Panel - Soliq.uz QR Fayl Bot</b>" if is_admin(user.id) else "🌟 <b>Soliq.uz QR Fayl Bot</b>"
+    
     welcome_text = (
-        "🌟 <b>Soliq.uz QR Fayl Bot</b>ga xush kelibsiz!\n\n"
+        f"{title}\n\n"
         "Bu bot orqali siz:\n"
         "✅ Fayllarni yuklab, doimiy havola olishingiz\n"
         "✅ Faylga QR-kod yaratishingiz\n"
         "✅ QR-kodni skaner qilib faylni ochishingiz mumkin\n\n"
-        "Quyidagi tugmalardan birini tanlang:"
     )
+    
+    if is_admin(user.id):
+        welcome_text += "👑 Admin: /admin - Admin panelni ochish\n\n"
+    
+    welcome_text += "Quyidagi tugmalardan birini tanlang:"
     
     await update.message.reply_text(
         welcome_text,
@@ -78,9 +131,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
+@require_permission
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle button callbacks"""
     query = update.callback_query
+    
+    # Admin callbacks don't need permission check
+    if query.data.startswith('admin_'):
+        await admin_callback(update, context)
+        return
+    
     await query.answer()
     
     if query.data == 'upload':
@@ -292,10 +352,12 @@ async def add_qr_to_pdf_document(pdf_path, qr_image_path, output_path):
         logger.error(f"PDF faylga QR qo'shish xatoligi: {e}")
         return False
 
+@require_permission
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle document uploads"""
     message = update.message
     document = message.document
+    user = update.effective_user
     
     if document.file_size > MAX_FILE_SIZE:
         await message.reply_text(
@@ -621,6 +683,16 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         file_url = f"{get_base_url()}/files/{unique_filename}"
         
+        # Save file record to database
+        add_file_record(
+            user_id=user.id,
+            file_name=document.file_name,
+            file_path=file_path,
+            file_url=file_url,
+            file_type=file_extension,
+            file_size=document.file_size
+        )
+        
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -660,10 +732,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=create_back_keyboard()
         )
 
+@require_permission
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle photo uploads"""
     message = update.message
     photo = message.photo[-1]
+    user = update.effective_user
     
     if photo.file_size > MAX_FILE_SIZE:
         await message.reply_text(
@@ -682,6 +756,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(file_path)
         
         file_url = f"{get_base_url()}/files/{unique_filename}"
+        
+        # Save file record to database
+        add_file_record(
+            user_id=user.id,
+            file_name=f"photo_{unique_filename}",
+            file_path=file_path,
+            file_url=file_url,
+            file_type='jpg',
+            file_size=photo.file_size
+        )
         
         qr = qrcode.QRCode(
             version=1,
@@ -738,6 +822,148 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Xatolik xabarini yuborishda muammo: {e}")
 
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin panel - only for admin"""
+    user_id = update.effective_user.id
+    
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Bu buyruq faqat admin uchun!")
+        return
+    
+    stats = get_stats()
+    
+    text = (
+        "🔱 <b>ADMIN PANEL</b>\n\n"
+        f"👥 Jami foydalanuvchilar: {stats['total_users']}\n"
+        f"✅ Ruxsat berilganlar: {stats['allowed_users']}\n"
+        f"📁 Jami fayllar: {stats['total_files']}\n"
+        f"💾 Jami hajm: {stats['total_size'] / (1024*1024):.2f} MB\n\n"
+        "Quyidagi amallardan birini tanlang:"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("👥 Foydalanuvchilar", callback_data='admin_users')],
+        [InlineKeyboardButton("📂 Yuklangan fayllar", callback_data='admin_files')],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data='admin_close')]
+    ]
+    
+    await update.message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle admin panel callbacks"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.edit_message_text("❌ Ruxsat yo'q!")
+        return
+    
+    if query.data == 'admin_users':
+        users = get_all_users()
+        
+        if not users:
+            await query.edit_message_text(
+                "👥 Foydalanuvchilar ro'yxati bo'sh",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]])
+            )
+            return
+        
+        text = "👥 <b>Foydalanuvchilar ro'yxati:</b>\n\n"
+        keyboard = []
+        
+        for user in users[:20]:  # Show first 20 users
+            user_id_db, username, full_name, is_allowed, created_at = user
+            status = "✅" if is_allowed else "❌"
+            text += f"{status} <code>{user_id_db}</code> - {full_name} (@{username})\n"
+            
+            # Add button for each user
+            button_text = f"{'🔓' if is_allowed else '🔒'} {full_name[:15]}"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f'admin_toggle_{user_id_db}')])
+        
+        keyboard.append([InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')])
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='HTML'
+        )
+    
+    elif query.data == 'admin_files':
+        files = get_all_files()
+        
+        if not files:
+            await query.edit_message_text(
+                "📂 Fayllar ro'yxati bo'sh",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]])
+            )
+            return
+        
+        text = "📂 <b>Yuklangan fayllar:</b>\n\n"
+        
+        for file in files[:15]:  # Show first 15 files
+            file_id, file_name, file_url, file_type, file_size, uploaded_at, username, full_name = file
+            size_mb = file_size / (1024 * 1024)
+            text += f"📄 <b>{file_name}</b>\n"
+            text += f"👤 {full_name} (@{username})\n"
+            text += f"📊 {size_mb:.2f} MB | {file_type.upper()}\n"
+            text += f"🔗 {file_url}\n"
+            text += f"📅 {uploaded_at}\n\n"
+        
+        keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='HTML'
+        )
+    
+    elif query.data.startswith('admin_toggle_'):
+        target_user_id = int(query.data.split('_')[2])
+        
+        # Toggle permission
+        is_allowed_now = is_user_allowed(target_user_id)
+        set_user_permission(target_user_id, not is_allowed_now)
+        
+        status_text = "berildi" if not is_allowed_now else "olindi"
+        await query.answer(f"✅ Ruxsat {status_text}!", show_alert=True)
+        
+        # Refresh users list
+        context.user_data['refresh'] = True
+        await admin_callback(update, context)
+    
+    elif query.data == 'admin_back':
+        stats = get_stats()
+        
+        text = (
+            "🔱 <b>ADMIN PANEL</b>\n\n"
+            f"👥 Jami foydalanuvchilar: {stats['total_users']}\n"
+            f"✅ Ruxsat berilganlar: {stats['allowed_users']}\n"
+            f"📁 Jami fayllar: {stats['total_files']}\n"
+            f"💾 Jami hajm: {stats['total_size'] / (1024*1024):.2f} MB\n\n"
+            "Quyidagi amallardan birini tanlang:"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("👥 Foydalanuvchilar", callback_data='admin_users')],
+            [InlineKeyboardButton("📂 Yuklangan fayllar", callback_data='admin_files')],
+            [InlineKeyboardButton("◀️ Yopish", callback_data='admin_close')]
+        ]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='HTML'
+        )
+    
+    elif query.data == 'admin_close':
+        await query.edit_message_text("✅ Admin panel yopildi")
+
 def main():
     """Main function to run the bot"""
     bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -750,6 +976,7 @@ def main():
     application = Application.builder().token(bot_token).build()
     
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("admin", admin_panel))
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
