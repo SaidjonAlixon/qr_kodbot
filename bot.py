@@ -215,14 +215,6 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
         # Add page break before QR code
         doc.add_page_break()
         
-        # Add heading as formatted paragraph (to avoid style issues)
-        heading_paragraph = doc.add_paragraph('📱 Faylga kirish QR kodi')
-        heading_paragraph.runs[0].bold = True
-        heading_paragraph.runs[0].font.size = Pt(18)
-        
-        # Add description
-        doc.add_paragraph('Ushbu QR kodni skanerlash orqali faylga to\'g\'ridan-to\'g\'ri kirishingiz mumkin:')
-        
         # Add QR code image (centered, 3 inch width)
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         paragraph = doc.add_paragraph()
