@@ -6,6 +6,7 @@ import logging
 import subprocess
 from pdf2docx import Converter
 from docx import Document
+from docx.shared import Inches
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.error import BadRequest, Conflict
@@ -41,6 +42,7 @@ def create_main_keyboard():
     keyboard = [
         [InlineKeyboardButton("📤 Fayl yuborish", callback_data='upload')],
         [InlineKeyboardButton("🔄 PDF ↔ Word", callback_data='convert_menu')],
+        [InlineKeyboardButton("📋 Word faylga QR qo'shish", callback_data='add_qr_to_word')],
         [InlineKeyboardButton("🧾 Bot haqida", callback_data='about')],
         [InlineKeyboardButton("📞 Aloqa", callback_data='contact')]
     ]
@@ -117,6 +119,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ Maksimal hajm: 20MB"
         )
         keyboard = create_convert_keyboard()
+    elif query.data == 'add_qr_to_word':
+        context.user_data['convert_mode'] = 'add_qr_to_word'
+        text = (
+            "📋 <b>Word faylga QR kod qo'shish</b>\n\n"
+            "Iltimos DOCX faylni yuboring.\n"
+            "Fayl ichiga QR kod qo'shiladi va qaytariladi.\n\n"
+            "📱 QR kodni skanerlash orqali faylga kirish mumkin!\n\n"
+            "⚠️ Faqat DOCX format qabul qilinadi\n"
+            "⚠️ Maksimal hajm: 20MB"
+        )
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]])
     elif query.data == 'back_to_main':
         context.user_data['convert_mode'] = None
         text = (
@@ -192,6 +205,40 @@ async def convert_word_to_pdf(docx_path, pdf_path):
         return False
     except Exception as e:
         logger.error(f"Word to PDF konvertatsiya xatoligi: {e}")
+        return False
+
+async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
+    """Add QR code to Word document"""
+    try:
+        doc = Document(docx_path)
+        
+        # Add page break before QR code
+        doc.add_page_break()
+        
+        # Add heading
+        doc.add_heading('📱 Faylga kirish QR kodi', level=1)
+        
+        # Add description
+        doc.add_paragraph('Ushbu QR kodni skanerlash orqali faylga to\'g\'ridan-to\'g\'ri kirishingiz mumkin:')
+        
+        # Add QR code image (centered, 3 inch width)
+        paragraph = doc.add_paragraph()
+        paragraph.alignment = 1  # Center alignment
+        run = paragraph.add_run()
+        run.add_picture(qr_image_path, width=Inches(3))
+        
+        # Add footer to the document (all sections)
+        for section in doc.sections:
+            footer = section.footer
+            footer_paragraph = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+            footer_paragraph.text = '🌐 Soliq.uz - Fayllaringiz xavfsiz va qulay!'
+            footer_paragraph.alignment = 1  # Center alignment
+        
+        # Save document
+        doc.save(output_path)
+        return True
+    except Exception as e:
+        logger.error(f"Word faylga QR qo'shish xatoligi: {e}")
         return False
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -310,6 +357,86 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 os.remove(docx_path)
             if pdf_path and os.path.exists(pdf_path):
                 os.remove(pdf_path)
+        return
+    
+    elif convert_mode == 'add_qr_to_word':
+        if file_extension != 'docx':
+            await message.reply_text(
+                "❌ Xatolik: Iltimos DOCX fayl yuboring!\n\n"
+                "💡 Maslahat: Agar DOC faylingiz bo'lsa, uni birinchi DOCX ga o'zgartiring.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]])
+            )
+            return
+        
+        status_message = await message.reply_text("⏳ Word faylga QR kod qo'shilmoqda...")
+        
+        original_docx_path = None
+        qr_image_path = None
+        output_docx_path = None
+        try:
+            file = await context.bot.get_file(document.file_id)
+            unique_id = str(uuid.uuid4())
+            original_docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_original.{file_extension}")
+            output_docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_with_qr.docx")
+            qr_image_path = os.path.join(QR_FOLDER, f"{unique_id}.png")
+            
+            # Download original file
+            await file.download_to_drive(original_docx_path)
+            
+            # Create permanent file link and QR code
+            permanent_filename = f"{uuid.uuid4()}.{file_extension}"
+            permanent_file_path = os.path.join(UPLOAD_FOLDER, permanent_filename)
+            file_url = f"{get_base_url()}/files/{permanent_filename}"
+            
+            # Generate QR code
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(file_url)
+            qr.make(fit=True)
+            
+            img = qr.make_image(fill_color="black", back_color="white")
+            img.save(qr_image_path)
+            
+            # Add QR code to Word document
+            success = await add_qr_to_word_document(original_docx_path, qr_image_path, output_docx_path)
+            
+            if success and os.path.exists(output_docx_path):
+                await status_message.edit_text("✅ QR kod muvaffaqiyatli qo'shildi!")
+                
+                # Save the file with QR code as the permanent file
+                os.rename(output_docx_path, permanent_file_path)
+                
+                # Send document with QR code
+                with open(permanent_file_path, 'rb') as docx_file:
+                    await message.reply_document(
+                        document=docx_file,
+                        filename=f"{os.path.splitext(document.file_name)[0]}_QR.docx",
+                        caption=f"✅ Word faylga QR kod qo'shildi!\n\n📥 Yuklab olish: {file_url}\n🌐 Soliq.uz",
+                        reply_markup=create_main_keyboard()
+                    )
+                context.user_data['convert_mode'] = None
+            else:
+                await status_message.edit_text(
+                    "❌ QR kod qo'shishda xatolik. Iltimos qaytadan urinib ko'ring.",
+                    reply_markup=create_main_keyboard()
+                )
+        except Exception as e:
+            logger.error(f"Word faylga QR qo'shish handler xatoligi: {e}")
+            await status_message.edit_text(
+                f"❌ Xatolik yuz berdi: {str(e)}",
+                reply_markup=create_main_keyboard()
+            )
+        finally:
+            if original_docx_path and os.path.exists(original_docx_path):
+                os.remove(original_docx_path)
+            if qr_image_path and os.path.exists(qr_image_path):
+                os.remove(qr_image_path)
+            if output_docx_path and os.path.exists(output_docx_path):
+                os.remove(output_docx_path)
         return
     
     if file_extension not in ALLOWED_EXTENSIONS:
