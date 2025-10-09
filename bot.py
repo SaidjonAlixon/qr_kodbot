@@ -44,9 +44,7 @@ def create_main_keyboard():
         [InlineKeyboardButton("📤 Fayl yuborish", callback_data='upload')],
         [InlineKeyboardButton("🔄 PDF ↔ Word", callback_data='convert_menu')],
         [InlineKeyboardButton("📋 Word faylga QR qo'shish", callback_data='add_qr_to_word')],
-        [InlineKeyboardButton("📄 PDF faylga QR qo'shish", callback_data='add_qr_to_pdf')],
-        [InlineKeyboardButton("🧾 Bot haqida", callback_data='about')],
-        [InlineKeyboardButton("📞 Aloqa", callback_data='contact')]
+        [InlineKeyboardButton("📄 PDF faylga QR qo'shish", callback_data='add_qr_to_pdf')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -58,6 +56,10 @@ def create_convert_keyboard():
         [InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def create_back_keyboard():
+    """Create back button keyboard"""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
@@ -91,7 +93,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📊 Taqdimotlar: PPTX, PPT\n\n"
             "⚠️ Maksimal hajm: 20MB"
         )
-        keyboard = create_main_keyboard()
+        keyboard = create_back_keyboard()
     elif query.data == 'convert_menu':
         text = (
             "🔄 <b>PDF ↔ Word Konvertatsiya</b>\n\n"
@@ -158,7 +160,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚡ Tez va qulay xizmat\n"
             "🆓 Bepul foydalanish"
         )
-        keyboard = create_main_keyboard()
+        keyboard = create_back_keyboard()
     elif query.data == 'contact':
         text = (
             "📞 <b>Aloqa</b>\n\n"
@@ -167,7 +169,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🌐 Website: https://soliq.uz\n"
             "📱 Telegram: @soliq_support"
         )
-        keyboard = create_main_keyboard()
+        keyboard = create_back_keyboard()
     else:
         return
     
@@ -298,7 +300,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if document.file_size > MAX_FILE_SIZE:
         await message.reply_text(
             "❌ Xatolik: Fayl hajmi 20MB dan oshmasligi kerak!",
-            reply_markup=create_main_keyboard()
+            reply_markup=create_back_keyboard()
         )
         return
     
@@ -453,7 +455,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if result.returncode != 0:
                     await status_message.edit_text(
                         "❌ DOC ni DOCX ga konvertatsiya qilishda xatolik.",
-                        reply_markup=create_main_keyboard()
+                        reply_markup=create_back_keyboard()
                     )
                     return
                 
@@ -497,19 +499,19 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         document=docx_file,
                         filename=f"{os.path.splitext(document.file_name)[0]}_QR.docx",
                         caption=f"✅ Word faylga QR kod qo'shildi!\n\n📥 Yuklab olish: {file_url}\n🌐 Soliq.uz",
-                        reply_markup=create_main_keyboard()
+                        reply_markup=create_back_keyboard()
                     )
                 context.user_data['convert_mode'] = None
             else:
                 await status_message.edit_text(
                     "❌ QR kod qo'shishda xatolik. Iltimos qaytadan urinib ko'ring.",
-                    reply_markup=create_main_keyboard()
+                    reply_markup=create_back_keyboard()
                 )
         except Exception as e:
             logger.error(f"Word faylga QR qo'shish handler xatoligi: {e}")
             await status_message.edit_text(
                 f"❌ Xatolik yuz berdi: {str(e)}",
-                reply_markup=create_main_keyboard()
+                reply_markup=create_back_keyboard()
             )
         finally:
             if original_file_path and os.path.exists(original_file_path):
@@ -578,19 +580,19 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         document=pdf_file,
                         filename=f"{os.path.splitext(document.file_name)[0]}_QR.pdf",
                         caption=f"✅ PDF faylga QR kod qo'shildi!\n\n📥 Yuklab olish: {file_url}\n🌐 Soliq.uz",
-                        reply_markup=create_main_keyboard()
+                        reply_markup=create_back_keyboard()
                     )
                 context.user_data['convert_mode'] = None
             else:
                 await status_message.edit_text(
                     "❌ QR kod qo'shishda xatolik. Iltimos qaytadan urinib ko'ring.",
-                    reply_markup=create_main_keyboard()
+                    reply_markup=create_back_keyboard()
                 )
         except Exception as e:
             logger.error(f"PDF faylga QR qo'shish handler xatoligi: {e}")
             await status_message.edit_text(
                 f"❌ Xatolik yuz berdi: {str(e)}",
-                reply_markup=create_main_keyboard()
+                reply_markup=create_back_keyboard()
             )
         finally:
             if original_pdf_path and os.path.exists(original_pdf_path):
@@ -604,7 +606,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if file_extension not in ALLOWED_EXTENSIONS:
         await message.reply_text(
             f"❌ Xatolik: '{file_extension}' formatidagi fayllar qo'llab-quvvatlanmaydi!",
-            reply_markup=create_main_keyboard()
+            reply_markup=create_back_keyboard()
         )
         return
     
@@ -649,13 +651,13 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_photo(
             photo=img_byte_arr,
             caption=f"📱 QR-kodni skaner qilish orqali faylni oching\n🌐 Soliq.uz",
-            reply_markup=create_main_keyboard()
+            reply_markup=create_back_keyboard()
         )
         
     except Exception as e:
         await status_message.edit_text(
             f"❌ Xatolik yuz berdi: {str(e)}",
-            reply_markup=create_main_keyboard()
+            reply_markup=create_back_keyboard()
         )
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -666,7 +668,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if photo.file_size > MAX_FILE_SIZE:
         await message.reply_text(
             "❌ Xatolik: Rasm hajmi 20MB dan oshmasligi kerak!",
-            reply_markup=create_main_keyboard()
+            reply_markup=create_back_keyboard()
         )
         return
     
@@ -710,13 +712,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_photo(
             photo=img_byte_arr,
             caption=f"📱 QR-kodni skaner qilish orqali rasmni oching\n🌐 Soliq.uz",
-            reply_markup=create_main_keyboard()
+            reply_markup=create_back_keyboard()
         )
         
     except Exception as e:
         await status_message.edit_text(
             f"❌ Xatolik yuz berdi: {str(e)}",
-            reply_markup=create_main_keyboard()
+            reply_markup=create_back_keyboard()
         )
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -731,7 +733,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update and update.effective_message:
             await update.effective_message.reply_text(
                 "❌ Uzr, xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.",
-                reply_markup=create_main_keyboard()
+                reply_markup=create_back_keyboard()
             )
     except Exception as e:
         logger.error(f"Xatolik xabarini yuborishda muammo: {e}")

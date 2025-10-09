@@ -6,14 +6,19 @@ This is a Telegram bot that allows users to upload files and receive QR codes fo
 
 ## Recent Changes (October 2025)
 
+- **UI/UX Improvements** (Latest - Oct 9, 2025):
+  - Streamlined main keyboard to show only 4 core action buttons
+  - Removed "Bot haqida" (About) and "Aloqa" (Contact) from main menu
+  - All mode screens now show only "Back" button for cleaner navigation
+  - Consistent back-button-only interface in all error and success messages
 - **PDF ↔ Word Conversion**: Added bidirectional file conversion between PDF and Word formats
   - PDF → Word using pdf2docx library (preserves layout, images, tables)
   - Word → PDF using LibreOffice headless mode
   - Proper error handling and temporary file cleanup
-- **Word QR Code Embedding**: New feature to embed QR codes directly inside Word documents
-  - Accepts DOCX files only (for python-docx compatibility)
-  - Adds QR code on new page with heading and description in Uzbek
-  - Includes proper document footer with Soliq.uz branding
+- **QR Code Embedding**: Embed QR codes directly inside Word and PDF documents
+  - Word: Accepts DOCX/DOC files, adds QR on last page (right-aligned, 1x1 inch)
+  - PDF: Accepts PDF files, adds QR on last page (bottom-right corner, 1x1 inch)
+  - Footer text: "DIDOX.UZ Orqali tasdiqlandi!"
   - QR code points to permanent download link of the file itself
 
 ## User Preferences
