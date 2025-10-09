@@ -4,6 +4,18 @@
 
 This is a Telegram bot that allows users to upload files and receive QR codes for easy sharing and access. When users upload files (PDF, Word, Excel, images, archives), the bot stores them, generates a permanent download link, and creates a QR code that points to the file. The system is designed for the Uzbek market ("soliq.uz" domain) and provides a simple file-sharing workflow through Telegram.
 
+## Recent Changes (October 2025)
+
+- **PDF ↔ Word Conversion**: Added bidirectional file conversion between PDF and Word formats
+  - PDF → Word using pdf2docx library (preserves layout, images, tables)
+  - Word → PDF using LibreOffice headless mode
+  - Proper error handling and temporary file cleanup
+- **Word QR Code Embedding**: New feature to embed QR codes directly inside Word documents
+  - Accepts DOCX files only (for python-docx compatibility)
+  - Adds QR code on new page with heading and description in Uzbek
+  - Includes proper document footer with Soliq.uz branding
+  - QR code points to permanent download link of the file itself
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
