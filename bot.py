@@ -123,10 +123,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['convert_mode'] = 'add_qr_to_word'
         text = (
             "📋 <b>Word faylga QR kod qo'shish</b>\n\n"
-            "Iltimos DOCX faylni yuboring.\n"
+            "Iltimos DOCX yoki DOC faylni yuboring.\n"
             "Fayl ichiga QR kod qo'shiladi va qaytariladi.\n\n"
             "📱 QR kodni skanerlash orqali faylga kirish mumkin!\n\n"
-            "⚠️ Faqat DOCX format qabul qilinadi\n"
             "⚠️ Maksimal hajm: 20MB"
         )
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]])
@@ -362,31 +361,63 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     elif convert_mode == 'add_qr_to_word':
-        if file_extension != 'docx':
+        if file_extension not in ['docx', 'doc']:
             await message.reply_text(
-                "❌ Xatolik: Iltimos DOCX fayl yuboring!\n\n"
-                "💡 Maslahat: Agar DOC faylingiz bo'lsa, uni birinchi DOCX ga o'zgartiring.",
+                "❌ Xatolik: Iltimos DOCX yoki DOC fayl yuboring!",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='back_to_main')]])
             )
             return
         
         status_message = await message.reply_text("⏳ Word faylga QR kod qo'shilmoqda...")
         
-        original_docx_path = None
+        original_file_path = None
+        converted_docx_path = None
         qr_image_path = None
         output_docx_path = None
         try:
             file = await context.bot.get_file(document.file_id)
             unique_id = str(uuid.uuid4())
-            original_docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_original.{file_extension}")
+            original_file_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_original.{file_extension}")
             output_docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_with_qr.docx")
             qr_image_path = os.path.join(QR_FOLDER, f"{unique_id}.png")
             
             # Download original file
-            await file.download_to_drive(original_docx_path)
+            await file.download_to_drive(original_file_path)
+            
+            # If DOC, convert to DOCX first
+            if file_extension == 'doc':
+                await status_message.edit_text("⏳ DOC faylni DOCX ga o'zgartirish...")
+                converted_docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_converted.docx")
+                
+                soffice_path = subprocess.run(
+                    ['which', 'soffice'],
+                    capture_output=True,
+                    text=True
+                ).stdout.strip() or '/nix/store/s77ki6j3if918jk373md4aajqii531rd-libreoffice-24.8.7.2-wrapped/bin/soffice'
+                
+                result = subprocess.run(
+                    [soffice_path, '--headless', '--convert-to', 'docx', '--outdir', UPLOAD_FOLDER, original_file_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                
+                if result.returncode != 0:
+                    await status_message.edit_text(
+                        "❌ DOC ni DOCX ga konvertatsiya qilishda xatolik.",
+                        reply_markup=create_main_keyboard()
+                    )
+                    return
+                
+                # LibreOffice creates file with same base name but .docx extension
+                converted_docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_original.docx")
+                working_docx_path = converted_docx_path
+                await status_message.edit_text("⏳ QR kod qo'shilmoqda...")
+            else:
+                working_docx_path = original_file_path
             
             # Create permanent file link and QR code
-            permanent_filename = f"{uuid.uuid4()}.{file_extension}"
+            permanent_filename = f"{uuid.uuid4()}.docx"
             permanent_file_path = os.path.join(UPLOAD_FOLDER, permanent_filename)
             file_url = f"{get_base_url()}/files/{permanent_filename}"
             
@@ -404,7 +435,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             img.save(qr_image_path)
             
             # Add QR code to Word document
-            success = await add_qr_to_word_document(original_docx_path, qr_image_path, output_docx_path)
+            success = await add_qr_to_word_document(working_docx_path, qr_image_path, output_docx_path)
             
             if success and os.path.exists(output_docx_path):
                 await status_message.edit_text("✅ QR kod muvaffaqiyatli qo'shildi!")
@@ -433,8 +464,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=create_main_keyboard()
             )
         finally:
-            if original_docx_path and os.path.exists(original_docx_path):
-                os.remove(original_docx_path)
+            if original_file_path and os.path.exists(original_file_path):
+                os.remove(original_file_path)
+            if converted_docx_path and os.path.exists(converted_docx_path):
+                os.remove(converted_docx_path)
             if qr_image_path and os.path.exists(qr_image_path):
                 os.remove(qr_image_path)
             if output_docx_path and os.path.exists(output_docx_path):
