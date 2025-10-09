@@ -31,6 +31,7 @@ def init_database():
             file_url TEXT,
             file_type TEXT,
             file_size INTEGER,
+            service_used TEXT DEFAULT 'file_upload',
             uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (user_id)
         )
@@ -95,15 +96,15 @@ def get_all_users() -> List[Tuple]:
     return users
 
 def add_file_record(user_id: int, file_name: str, file_path: str, file_url: str, 
-                   file_type: str, file_size: int):
+                   file_type: str, file_size: int, service_used: str = 'file_upload'):
     """Add file upload record to database"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     
     cursor.execute('''
-        INSERT INTO files (user_id, file_name, file_path, file_url, file_type, file_size)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (user_id, file_name, file_path, file_url, file_type, file_size))
+        INSERT INTO files (user_id, file_name, file_path, file_url, file_type, file_size, service_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, file_name, file_path, file_url, file_type, file_size, service_used))
     
     conn.commit()
     conn.close()
@@ -115,7 +116,7 @@ def get_all_files() -> List[Tuple]:
     
     cursor.execute('''
         SELECT f.id, f.file_name, f.file_url, f.file_type, f.file_size, 
-               f.uploaded_at, u.username, u.full_name
+               f.service_used, f.uploaded_at, u.username, u.full_name
         FROM files f
         JOIN users u ON f.user_id = u.user_id
         ORDER BY f.uploaded_at DESC

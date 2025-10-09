@@ -394,6 +394,25 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if success and os.path.exists(docx_path):
                 await status_message.edit_text("✅ Konvertatsiya muvaffaqiyatli!")
                 
+                # Create URL and save to database
+                docx_filename = f"{unique_id}.docx"
+                file_url = f"{get_base_url()}/files/{docx_filename}"
+                file_size = os.path.getsize(docx_path)
+                
+                try:
+                    add_file_record(
+                        user_id=user.id,
+                        file_name=f"{os.path.splitext(document.file_name)[0]}.docx",
+                        file_path=docx_path,
+                        file_url=file_url,
+                        file_type='docx',
+                        file_size=file_size,
+                        service_used='pdf_to_word'
+                    )
+                    logger.info(f"PDF to Word conversion saved: {document.file_name} by user {user.id}")
+                except Exception as e:
+                    logger.error(f"Failed to save PDF to Word record: {e}")
+                
                 with open(docx_path, 'rb') as docx_file:
                     await message.reply_document(
                         document=docx_file,
@@ -414,10 +433,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=create_convert_keyboard()
             )
         finally:
+            # Clean up only the source PDF, keep the converted DOCX
             if pdf_path and os.path.exists(pdf_path):
                 os.remove(pdf_path)
-            if docx_path and os.path.exists(docx_path):
-                os.remove(docx_path)
         return
     
     elif convert_mode == 'word_to_pdf':
@@ -446,6 +464,24 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if success and os.path.exists(pdf_path):
                 await status_message.edit_text("✅ Konvertatsiya muvaffaqiyatli!")
                 
+                # Create URL and save to database
+                file_url = f"{get_base_url()}/files/{pdf_filename}"
+                file_size = os.path.getsize(pdf_path)
+                
+                try:
+                    add_file_record(
+                        user_id=user.id,
+                        file_name=f"{os.path.splitext(document.file_name)[0]}.pdf",
+                        file_path=pdf_path,
+                        file_url=file_url,
+                        file_type='pdf',
+                        file_size=file_size,
+                        service_used='word_to_pdf'
+                    )
+                    logger.info(f"Word to PDF conversion saved: {document.file_name} by user {user.id}")
+                except Exception as e:
+                    logger.error(f"Failed to save Word to PDF record: {e}")
+                
                 with open(pdf_path, 'rb') as pdf_file:
                     await message.reply_document(
                         document=pdf_file,
@@ -466,10 +502,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=create_convert_keyboard()
             )
         finally:
+            # Clean up only the source DOCX, keep the converted PDF
             if docx_path and os.path.exists(docx_path):
                 os.remove(docx_path)
-            if pdf_path and os.path.exists(pdf_path):
-                os.remove(pdf_path)
         return
     
     elif convert_mode == 'add_qr_to_word':
@@ -555,6 +590,22 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Save the file with QR code as the permanent file
                 os.rename(output_docx_path, permanent_file_path)
                 
+                # Save to database
+                file_size = os.path.getsize(permanent_file_path)
+                try:
+                    add_file_record(
+                        user_id=user.id,
+                        file_name=f"{os.path.splitext(document.file_name)[0]}_QR.docx",
+                        file_path=permanent_file_path,
+                        file_url=file_url,
+                        file_type='docx',
+                        file_size=file_size,
+                        service_used='qr_to_word'
+                    )
+                    logger.info(f"QR to Word saved: {document.file_name} by user {user.id}")
+                except Exception as e:
+                    logger.error(f"Failed to save QR to Word record: {e}")
+                
                 # Send document with QR code
                 with open(permanent_file_path, 'rb') as docx_file:
                     await message.reply_document(
@@ -636,6 +687,22 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Save the file with QR code as the permanent file
                 os.rename(output_pdf_path, permanent_file_path)
                 
+                # Save to database
+                file_size = os.path.getsize(permanent_file_path)
+                try:
+                    add_file_record(
+                        user_id=user.id,
+                        file_name=f"{os.path.splitext(document.file_name)[0]}_QR.pdf",
+                        file_path=permanent_file_path,
+                        file_url=file_url,
+                        file_type='pdf',
+                        file_size=file_size,
+                        service_used='qr_to_pdf'
+                    )
+                    logger.info(f"QR to PDF saved: {document.file_name} by user {user.id}")
+                except Exception as e:
+                    logger.error(f"Failed to save QR to PDF record: {e}")
+                
                 # Send document with QR code
                 with open(permanent_file_path, 'rb') as pdf_file:
                     await message.reply_document(
@@ -684,14 +751,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_url = f"{get_base_url()}/files/{unique_filename}"
         
         # Save file record to database
-        add_file_record(
-            user_id=user.id,
-            file_name=document.file_name,
-            file_path=file_path,
-            file_url=file_url,
-            file_type=file_extension,
-            file_size=document.file_size
-        )
+        try:
+            add_file_record(
+                user_id=user.id,
+                file_name=document.file_name,
+                file_path=file_path,
+                file_url=file_url,
+                file_type=file_extension,
+                file_size=document.file_size
+            )
+            logger.info(f"File record saved: {document.file_name} by user {user.id}")
+        except Exception as e:
+            logger.error(f"Failed to save file record: {e}")
         
         qr = qrcode.QRCode(
             version=1,
@@ -758,14 +829,18 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_url = f"{get_base_url()}/files/{unique_filename}"
         
         # Save file record to database
-        add_file_record(
-            user_id=user.id,
-            file_name=f"photo_{unique_filename}",
-            file_path=file_path,
-            file_url=file_url,
-            file_type='jpg',
-            file_size=photo.file_size
-        )
+        try:
+            add_file_record(
+                user_id=user.id,
+                file_name=f"photo_{unique_filename}",
+                file_path=file_path,
+                file_url=file_url,
+                file_type='jpg',
+                file_size=photo.file_size
+            )
+            logger.info(f"Photo record saved: photo_{unique_filename} by user {user.id}")
+        except Exception as e:
+            logger.error(f"Failed to save photo record: {e}")
         
         qr = qrcode.QRCode(
             version=1,
@@ -853,6 +928,37 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
+async def admin_users_list(query, context):
+    """Show users list for admin"""
+    users = get_all_users()
+    
+    if not users:
+        await query.edit_message_text(
+            "👥 Foydalanuvchilar ro'yxati bo'sh",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]])
+        )
+        return
+    
+    text = "👥 <b>Foydalanuvchilar ro'yxati:</b>\n\n"
+    keyboard = []
+    
+    for user in users[:20]:  # Show first 20 users
+        user_id_db, username, full_name, is_allowed, created_at = user
+        status = "✅" if is_allowed else "❌"
+        text += f"{status} <code>{user_id_db}</code> - {full_name} (@{username})\n"
+        
+        # Add button for each user
+        button_text = f"{'🔓' if is_allowed else '🔒'} {full_name[:15]}"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f'admin_toggle_{user_id_db}')])
+    
+    keyboard.append([InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')])
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle admin panel callbacks"""
     query = update.callback_query
@@ -865,57 +971,93 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if query.data == 'admin_users':
-        users = get_all_users()
-        
-        if not users:
-            await query.edit_message_text(
-                "👥 Foydalanuvchilar ro'yxati bo'sh",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]])
-            )
-            return
-        
-        text = "👥 <b>Foydalanuvchilar ro'yxati:</b>\n\n"
-        keyboard = []
-        
-        for user in users[:20]:  # Show first 20 users
-            user_id_db, username, full_name, is_allowed, created_at = user
-            status = "✅" if is_allowed else "❌"
-            text += f"{status} <code>{user_id_db}</code> - {full_name} (@{username})\n"
-            
-            # Add button for each user
-            button_text = f"{'🔓' if is_allowed else '🔒'} {full_name[:15]}"
-            keyboard.append([InlineKeyboardButton(button_text, callback_data=f'admin_toggle_{user_id_db}')])
-        
-        keyboard.append([InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')])
-        
-        await query.edit_message_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='HTML'
-        )
+        await admin_users_list(query, context)
     
     elif query.data == 'admin_files':
-        files = get_all_files()
-        
-        if not files:
+        try:
+            files = get_all_files()
+            logger.info(f"Admin panel - files count: {len(files)}")
+            
+            if not files:
+                await query.edit_message_text(
+                    "📂 <b>Fayllar ro'yxati bo'sh</b>\n\n"
+                    "ℹ️ Hali hech kim fayl yuklamagan.\n"
+                    "Foydalanuvchilar fayl yuk lagach, bu yerda ko'rsatiladi.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]]),
+                    parse_mode='HTML'
+                )
+                return
+            
+            text = "📂 <b>Yuklangan fayllar:</b>\n\n"
+            
+            # Map service names to Uzbek
+            service_names = {
+                'file_upload': '📤 Fayl yuklash',
+                'pdf_to_word': '📄 PDF → Word',
+                'word_to_pdf': '📄 Word → PDF',
+                'qr_to_word': '🔲 QR → Word',
+                'qr_to_pdf': '🔲 QR → PDF'
+            }
+            
+            for file in files[:15]:  # Show first 15 files
+                file_id, file_name, file_url, file_type, file_size, service_used, uploaded_at, username, full_name = file
+                size_mb = file_size / (1024 * 1024)
+                service_name = service_names.get(service_used, service_used)
+                text += f"📄 <b>{file_name}</b>\n"
+                text += f"👤 {full_name} (@{username})\n"
+                text += f"🔧 Xizmat: {service_name}\n"
+                text += f"📊 {size_mb:.2f} MB | {file_type.upper()}\n"
+                text += f"🔗 {file_url}\n"
+                text += f"📅 {uploaded_at}\n\n"
+            
+            keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]]
+            
             await query.edit_message_text(
-                "📂 Fayllar ro'yxati bo'sh",
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            logger.error(f"Admin files panel error: {e}")
+            await query.edit_message_text(
+                f"❌ Xatolik yuz berdi: {str(e)}",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]])
             )
+    
+    elif query.data.startswith('admin_toggle_'):
+        # Show user detail page
+        target_user_id = int(query.data.split('_')[2])
+        
+        # Get user info from database
+        users = get_all_users()
+        user_info = None
+        for user in users:
+            if user[0] == target_user_id:
+                user_info = user
+                break
+        
+        if not user_info:
+            await query.answer("❌ Foydalanuvchi topilmadi!")
             return
         
-        text = "📂 <b>Yuklangan fayllar:</b>\n\n"
+        user_id_db, username, full_name, is_allowed, created_at = user_info
+        status = "✅ Ruxsat berilgan" if is_allowed else "❌ Ruxsat yo'q"
         
-        for file in files[:15]:  # Show first 15 files
-            file_id, file_name, file_url, file_type, file_size, uploaded_at, username, full_name = file
-            size_mb = file_size / (1024 * 1024)
-            text += f"📄 <b>{file_name}</b>\n"
-            text += f"👤 {full_name} (@{username})\n"
-            text += f"📊 {size_mb:.2f} MB | {file_type.upper()}\n"
-            text += f"🔗 {file_url}\n"
-            text += f"📅 {uploaded_at}\n\n"
+        text = (
+            f"👤 <b>Foydalanuvchi ma'lumotlari:</b>\n\n"
+            f"🆔 ID: <code>{user_id_db}</code>\n"
+            f"👨‍💼 Ism: {full_name}\n"
+            f"📱 Username: @{username}\n"
+            f"📊 Holat: {status}\n"
+            f"📅 Qo'shildi: {created_at}\n\n"
+            f"Foydalanuvchiga ruxsat bering yoki rad eting:"
+        )
         
-        keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]]
+        keyboard = [
+            [InlineKeyboardButton("✅ Ruxsat berish", callback_data=f'admin_grant_{user_id_db}')],
+            [InlineKeyboardButton("❌ Rad etish", callback_data=f'admin_deny_{user_id_db}')],
+            [InlineKeyboardButton("◀️ Orqaga", callback_data='admin_users')]
+        ]
         
         await query.edit_message_text(
             text,
@@ -923,19 +1065,65 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
     
-    elif query.data.startswith('admin_toggle_'):
+    elif query.data.startswith('admin_grant_'):
+        # Grant permission
         target_user_id = int(query.data.split('_')[2])
         
-        # Toggle permission
+        # Check current status
         is_allowed_now = is_user_allowed(target_user_id)
-        set_user_permission(target_user_id, not is_allowed_now)
         
-        status_text = "berildi" if not is_allowed_now else "olindi"
-        await query.answer(f"✅ Ruxsat {status_text}!", show_alert=True)
+        if is_allowed_now:
+            await query.answer("ℹ️ Foydalanuvchi allaqachon ruxsat berilgan!", show_alert=True)
+        else:
+            # Grant permission
+            set_user_permission(target_user_id, True)
+            
+            # Send notification to user
+            try:
+                await context.bot.send_message(
+                    chat_id=target_user_id,
+                    text="✅ <b>Tabriklaymiz!</b>\n\n"
+                         "Sizga botdan foydalanish uchun ruxsat berildi.\n\n"
+                         "Botdan foydalanish uchun /start buyrug'ini bosing.",
+                    parse_mode='HTML'
+                )
+                await query.answer("✅ Ruxsat berildi va foydalanuvchiga xabar yuborildi!", show_alert=True)
+            except Exception as e:
+                logger.error(f"Foydalanuvchiga xabar yuborishda xato: {e}")
+                await query.answer("✅ Ruxsat berildi (lekin xabar yuborilmadi)", show_alert=True)
         
-        # Refresh users list
-        context.user_data['refresh'] = True
-        await admin_callback(update, context)
+        # Go back to users list
+        await admin_users_list(query, context)
+    
+    elif query.data.startswith('admin_deny_'):
+        # Deny permission
+        target_user_id = int(query.data.split('_')[2])
+        
+        # Check current status
+        is_allowed_now = is_user_allowed(target_user_id)
+        
+        if not is_allowed_now:
+            await query.answer("ℹ️ Foydalanuvchi allaqachon rad etilgan!", show_alert=True)
+        else:
+            # Deny permission
+            set_user_permission(target_user_id, False)
+            
+            # Send notification to user
+            try:
+                await context.bot.send_message(
+                    chat_id=target_user_id,
+                    text="❌ <b>Xabarnoma</b>\n\n"
+                         "Sizning botdan foydalanish ruxsatingiz bekor qilindi.\n\n"
+                         "Agar bu xato deb hisoblasangiz, admin bilan bog'laning.",
+                    parse_mode='HTML'
+                )
+                await query.answer("❌ Ruxsat bekor qilindi va foydalanuvchiga xabar yuborildi!", show_alert=True)
+            except Exception as e:
+                logger.error(f"Foydalanuvchiga xabar yuborishda xato: {e}")
+                await query.answer("❌ Ruxsat bekor qilindi (lekin xabar yuborilmadi)", show_alert=True)
+        
+        # Go back to users list
+        await admin_users_list(query, context)
     
     elif query.data == 'admin_back':
         stats = get_stats()

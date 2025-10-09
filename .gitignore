@@ -13,6 +13,9 @@ ENV/
 uploads/
 qr_codes/
 
+# Database
+bot_database.db
+
 # IDE
 .vscode/
 .idea/

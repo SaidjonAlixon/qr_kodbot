@@ -6,7 +6,16 @@ This is a Telegram bot that allows users to upload files and receive QR codes fo
 
 ## Recent Changes (October 2025)
 
-- **UI/UX Improvements** (Latest - Oct 9, 2025):
+- **Admin Panel & Permission System** (Latest - Oct 9, 2025):
+  - Added SQLite database (bot_database.db) with users and files tables
+  - Implemented permission-based access control system
+  - Admin panel accessible via /admin command (admin-only)
+  - User detail screen with "Ruxsat berish" and "Rad etish" buttons
+  - Automatic notification to users when permission is granted/revoked
+  - Admin can view all users, files, and statistics
+  - All file uploads tracked in database with metadata
+  - @require_permission decorator protects all bot functions
+- **UI/UX Improvements** (Oct 9, 2025):
   - Streamlined main keyboard to show only 4 core action buttons
   - Removed "Bot haqida" (About) and "Aloqa" (Contact) from main menu
   - All mode screens now show only "Back" button for cleaner navigation
@@ -86,12 +95,41 @@ Preferred communication style: Simple, everyday language.
 - **qrcode**: QR code generation
 - **Pillow** (implied): Image processing for QR codes
 
+### Database System
+- **Type**: SQLite database (bot_database.db)
+- **Tables**:
+  - `users`: Stores user_id, username, full_name, is_allowed (permission), created_at
+  - `files`: Stores file metadata (filename, path, url, type, size, uploaded_by, uploaded_at)
+- **Functions** (database.py):
+  - `add_or_update_user()`: Auto-save/update user info on every interaction
+  - `is_user_allowed()`: Check if user has permission to use bot
+  - `set_user_permission()`: Grant/revoke user access
+  - `get_all_users()`: Retrieve all registered users
+  - `add_file_record()`: Save file metadata after upload
+  - `get_all_files()`: Retrieve all uploaded files
+  - `get_stats()`: Get statistics (total users, allowed users, files, storage)
+
+### Permission & Access Control
+- **Admin System**: Admin ID stored in ADMIN_TELEGRAM_ID environment secret
+- **Permission Decorator**: `@require_permission` protects all bot functions
+- **Access Flow**:
+  1. User starts bot → auto-saved to database
+  2. Permission check → admin always allowed, others need approval
+  3. Without permission → error message shown
+  4. Admin grants permission → user gets notification
+- **Admin Panel** (/admin command):
+  - Dashboard with statistics
+  - User management: view all users, grant/revoke permissions
+  - File management: view all uploaded files with metadata
+  - User detail screen with "Ruxsat berish" and "Rad etish" buttons
+  - Automatic notifications sent to users on permission change
+
 ### File Storage
 - **Type**: Local filesystem storage
 - **Directories**:
   - `uploads/` - User-uploaded files
   - `qr_codes/` - Generated QR code images
-- **Note**: No database currently implemented; file metadata tracked through filesystem
+  - `bot_database.db` - SQLite database (gitignored)
 
 ### Hosting Platform
 - **Primary**: Replit (environment variable detection present)
@@ -99,7 +137,8 @@ Preferred communication style: Simple, everyday language.
 - **Fallback**: localhost:5000 for local development
 
 ### Future Considerations
-- No database integration currently (could be added for file metadata, usage analytics, user tracking)
 - No CDN integration (files served directly from application server)
-- No authentication/authorization system (bot is open to all Telegram users)
 - No file expiration or cleanup mechanism implemented
+- Could add analytics dashboard for admin
+- Could implement file search functionality
+- Could add bulk operations for admin (delete multiple files, export data)
