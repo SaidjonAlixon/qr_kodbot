@@ -31,6 +31,17 @@ def main():
     """Asosiy funksiya"""
     print("Railway da ishga tushmoqda...")
     
+    # Token tekshirish
+    from config import TELEGRAM_BOT_TOKEN
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == 'YOUR_BOT_TOKEN_HERE':
+        print("XATOLIK: TELEGRAM_BOT_TOKEN o'rnatilmagan!")
+        print("Railway da Environment Variables da TELEGRAM_BOT_TOKEN ni o'rnating.")
+        print("Faqat file server ishlaydi...")
+        
+        # Faqat file server ni ishga tushirish
+        start_file_server()
+        return
+    
     # File server ni alohida thread da ishga tushirish
     file_server_thread = threading.Thread(target=start_file_server, daemon=True)
     file_server_thread.start()
