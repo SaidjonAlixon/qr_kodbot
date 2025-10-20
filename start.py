@@ -6,15 +6,14 @@ import os
 import sys
 import threading
 import time
-import subprocess
-from config import RAILWAY_URL, PORT
+from config import RAILWAY_URL, PORT, TELEGRAM_BOT_TOKEN
 
 def start_file_server():
     """File server ni ishga tushirish"""
     print("File server ishga tushmoqda...")
     try:
         import file_server
-        file_server.app.run(host='0.0.0.0', port=PORT, debug=False)
+        file_server.app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
     except Exception as e:
         print(f"File server xatoligi: {e}")
 
@@ -22,11 +21,10 @@ def start_bot():
     """Bot ni ishga tushirish"""
     print("Bot ishga tushmoqda...")
     try:
-        print("Bot ni alohida process da ishga tushiramiz...")
-        subprocess.Popen([sys.executable, 'bot.py'], 
-                        stdout=subprocess.PIPE, 
-                        stderr=subprocess.PIPE)
-        print("Bot process ishga tushdi!")
+        print("Bot modulini import qilmoqda...")
+        import bot
+        print("Bot moduli import qilindi, main() ni chaqirmoqda...")
+        bot.main()
     except Exception as e:
         print(f"Bot xatoligi: {e}")
         import traceback
@@ -35,9 +33,9 @@ def start_bot():
 def main():
     """Asosiy funksiya"""
     print("Railway da ishga tushmoqda...")
+    print(f"TELEGRAM_BOT_TOKEN mavjud: {bool(TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != 'YOUR_BOT_TOKEN_HERE')}")
     
     # Token tekshirish
-    from config import TELEGRAM_BOT_TOKEN
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == 'YOUR_BOT_TOKEN_HERE':
         print("XATOLIK: TELEGRAM_BOT_TOKEN o'rnatilmagan!")
         print("Railway da Environment Variables da TELEGRAM_BOT_TOKEN ni o'rnating.")
@@ -47,12 +45,14 @@ def main():
         start_file_server()
         return
     
+    print("Token mavjud, ikkala xizmatni ishga tushiramiz...")
+    
     # File server ni alohida thread da ishga tushirish
     file_server_thread = threading.Thread(target=start_file_server, daemon=True)
     file_server_thread.start()
     
     # Kichik kutish
-    time.sleep(2)
+    time.sleep(3)
     
     # Bot ni ishga tushirish
     start_bot()
