@@ -13,6 +13,13 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram.error import BadRequest, Conflict
 from functools import wraps
 
+# Import configuration
+from config import (
+    TELEGRAM_BOT_TOKEN, ADMIN_TELEGRAM_ID, MAX_FILE_SIZE,
+    UPLOAD_FOLDER, QR_FOLDER, ALLOWED_EXTENSIONS, 
+    RAILWAY_URL, REPLIT_URL
+)
+
 # Import database functions
 from database import (
     add_or_update_user, is_user_allowed, set_user_permission,
@@ -25,21 +32,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-UPLOAD_FOLDER = 'uploads'
-QR_FOLDER = 'qr_codes'
+# Create directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(QR_FOLDER, exist_ok=True)
 
-MAX_FILE_SIZE = 20 * 1024 * 1024
-
-ALLOWED_EXTENSIONS = {
-    'pdf', 'docx', 'doc', 'xlsx', 'xls', 
-    'jpg', 'jpeg', 'png', 'gif', 'bmp',
-    'zip', 'rar', '7z', 'txt', 'pptx', 'ppt'
-}
-
-# Get admin ID from environment
-ADMIN_ID = int(os.getenv('ADMIN_TELEGRAM_ID', 0))
+# Admin ID from config
+ADMIN_ID = ADMIN_TELEGRAM_ID
 
 def is_admin(user_id: int) -> bool:
     """Check if user is admin"""
@@ -76,9 +74,10 @@ def require_permission(func):
 
 def get_base_url():
     """Get the base URL for file hosting"""
-    replit_url = os.getenv('REPLIT_DEV_DOMAIN')
-    if replit_url:
-        return f"https://{replit_url}"
+    if RAILWAY_URL:
+        return f"https://{RAILWAY_URL}"
+    elif REPLIT_URL:
+        return f"https://{REPLIT_URL}"
     return "http://localhost:5000"
 
 def create_main_keyboard():
@@ -1154,14 +1153,13 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Main function to run the bot"""
-    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-    
-    if not bot_token:
-        print("❌ TELEGRAM_BOT_TOKEN muhit o'zgaruvchisi topilmadi!")
-        print("📝 Botni ishga tushirish uchun Telegram Bot Token kerak.")
+    if not TELEGRAM_BOT_TOKEN:
+        print("XATOLIK: TELEGRAM_BOT_TOKEN muhit o'zgaruvchisi topilmadi!")
+        print("Botni ishga tushirish uchun Telegram Bot Token kerak.")
+        print("config.py faylida TELEGRAM_BOT_TOKEN ni o'rnating.")
         return
     
-    application = Application.builder().token(bot_token).build()
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("admin", admin_panel))
@@ -1171,7 +1169,7 @@ def main():
     
     application.add_error_handler(error_handler)
     
-    print("🤖 Bot ishga tushdi! Fayllarni qabul qilish uchun tayyor...")
+    print("Bot ishga tushdi! Fayllarni qabul qilish uchun tayyor...")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':

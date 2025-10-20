@@ -1,9 +1,10 @@
 import os
 from flask import Flask, send_from_directory, abort
+from config import UPLOAD_FOLDER, PORT, HOST
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = 'uploads'
+# Create upload folder
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route('/files/<filename>')
@@ -56,4 +57,5 @@ def home():
     '''
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    print(f"File server ishga tushdi: http://{HOST}:{PORT}")
+    app.run(host=HOST, port=PORT)
