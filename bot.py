@@ -1156,6 +1156,24 @@ def main():
     print(f"Bot main() funksiyasi ishga tushdi...")
     print(f"TELEGRAM_BOT_TOKEN: {TELEGRAM_BOT_TOKEN[:10] if TELEGRAM_BOT_TOKEN else 'None'}...")
     
+    # File server ni alohida thread da ishga tushirish
+    import threading
+    import time
+    
+    def start_file_server():
+        """File server ni ishga tushirish"""
+        print("File server ishga tushmoqda...")
+        try:
+            import file_server
+            file_server.app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
+        except Exception as e:
+            print(f"File server xatoligi: {e}")
+    
+    # File server ni background da ishga tushirish
+    file_server_thread = threading.Thread(target=start_file_server, daemon=True)
+    file_server_thread.start()
+    time.sleep(2)
+    
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == 'YOUR_BOT_TOKEN_HERE':
         print("XATOLIK: TELEGRAM_BOT_TOKEN muhit o'zgaruvchisi topilmadi!")
         print("Botni ishga tushirish uchun Telegram Bot Token kerak.")
