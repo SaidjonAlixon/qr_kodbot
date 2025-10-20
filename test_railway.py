@@ -21,3 +21,7 @@ except Exception as e:
     print(f"Config import xatoligi: {e}")
 
 print("Test tugadi!")
+print("5 soniya kutamiz...")
+import time
+time.sleep(5)
+print("Test to'liq tugadi!")
