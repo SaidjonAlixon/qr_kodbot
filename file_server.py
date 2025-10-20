@@ -1,8 +1,14 @@
 import os
 from flask import Flask, send_from_directory, abort
-from config import UPLOAD_FOLDER, PORT, HOST
 
 app = Flask(__name__)
+
+# Environment variables ni to'g'ridan-to'g'ri olish
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
+PORT = int(os.getenv('PORT', '5000'))
+HOST = os.getenv('HOST', '0.0.0.0')
+
+print(f"File server - PORT: {PORT}, HOST: {HOST}, UPLOAD_FOLDER: {UPLOAD_FOLDER}")
 
 # Create upload folder
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)

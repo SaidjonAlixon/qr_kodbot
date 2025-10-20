@@ -1180,10 +1180,16 @@ def main():
         """File server ni ishga tushirish"""
         print("File server ishga tushmoqda...")
         try:
+            # PORT ni to'g'ridan-to'g'ri olish
+            port = int(os.getenv('PORT', '5000'))
+            print(f"File server port: {port}")
+            
             import file_server
-            file_server.app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
+            file_server.app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
         except Exception as e:
             print(f"File server xatoligi: {e}")
+            import traceback
+            traceback.print_exc()
     
     # File server ni background da ishga tushirish
     file_server_thread = threading.Thread(target=start_file_server, daemon=True)
