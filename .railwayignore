@@ -1,0 +1,9 @@
+# Ignore old files
+file_server.py
+bot.py
+start.py
+uploads/
+qr_codes/
+*.db
+__pycache__/
+*.pyc

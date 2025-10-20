@@ -21,7 +21,20 @@ except Exception as e:
     print(f"Config import xatoligi: {e}")
 
 print("Test tugadi!")
-print("5 soniya kutamiz...")
+print("10 soniya kutamiz...")
 import time
-time.sleep(5)
+time.sleep(10)
 print("Test to'liq tugadi!")
+print("Endi bot.py ni ishga tushiramiz...")
+
+# Bot ni ishga tushirish
+try:
+    import subprocess
+    import sys
+    print("Bot ni alohida process da ishga tushiramiz...")
+    subprocess.Popen([sys.executable, 'bot.py'])
+    print("Bot process ishga tushdi!")
+except Exception as e:
+    print(f"Bot ishga tushirishda xatolik: {e}")
+
+print("Barcha jarayonlar tugadi!")
