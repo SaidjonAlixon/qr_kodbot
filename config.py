@@ -12,6 +12,11 @@ ADMIN_TELEGRAM_ID = int(os.getenv('ADMIN_TELEGRAM_ID', '0'))
 RAILWAY_URL = os.getenv('RAILWAY_PUBLIC_DOMAIN')
 REPLIT_URL = os.getenv('REPLIT_DEV_DOMAIN')
 
+# Debug: Environment variables ni tekshirish
+print(f"DEBUG - RAILWAY_PUBLIC_DOMAIN: {os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
+print(f"DEBUG - RAILWAY_URL: {RAILWAY_URL}")
+print(f"DEBUG - PORT: {os.getenv('PORT')}")
+
 # File Server Configuration
 PORT = int(os.getenv('PORT', '5000'))
 HOST = os.getenv('HOST', '0.0.0.0')
