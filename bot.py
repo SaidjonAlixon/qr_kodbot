@@ -1153,7 +1153,10 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Main function to run the bot"""
-    if not TELEGRAM_BOT_TOKEN:
+    print(f"Bot main() funksiyasi ishga tushdi...")
+    print(f"TELEGRAM_BOT_TOKEN: {TELEGRAM_BOT_TOKEN[:10] if TELEGRAM_BOT_TOKEN else 'None'}...")
+    
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == 'YOUR_BOT_TOKEN_HERE':
         print("XATOLIK: TELEGRAM_BOT_TOKEN muhit o'zgaruvchisi topilmadi!")
         print("Botni ishga tushirish uchun Telegram Bot Token kerak.")
         print("config.py faylida TELEGRAM_BOT_TOKEN ni o'rnating.")

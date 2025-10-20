@@ -22,10 +22,15 @@ def start_bot():
     """Bot ni ishga tushirish"""
     print("Bot ishga tushmoqda...")
     try:
-        import bot
-        bot.main()
+        print("Bot ni alohida process da ishga tushiramiz...")
+        subprocess.Popen([sys.executable, 'bot.py'], 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE)
+        print("Bot process ishga tushdi!")
     except Exception as e:
         print(f"Bot xatoligi: {e}")
+        import traceback
+        traceback.print_exc()
 
 def main():
     """Asosiy funksiya"""
