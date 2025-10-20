@@ -8,6 +8,10 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
 ADMIN_TELEGRAM_ID = int(os.getenv('ADMIN_TELEGRAM_ID', '0'))
 
+# Railway Configuration
+RAILWAY_URL = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+REPLIT_URL = os.getenv('REPLIT_DEV_DOMAIN')
+
 # File Server Configuration
 PORT = int(os.getenv('PORT', '5000'))
 HOST = os.getenv('HOST', '0.0.0.0')
@@ -28,7 +32,3 @@ QR_FOLDER = os.getenv('QR_FOLDER', 'qr_codes')
 ALLOWED_EXTENSIONS = set(os.getenv('ALLOWED_EXTENSIONS', 
     'pdf,docx,doc,xlsx,xls,jpg,jpeg,png,gif,bmp,zip,rar,7z,txt,pptx,ppt'
 ).split(','))
-
-# Railway Configuration
-RAILWAY_URL = os.getenv('RAILWAY_PUBLIC_DOMAIN')
-REPLIT_URL = os.getenv('REPLIT_DEV_DOMAIN')
