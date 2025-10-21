@@ -272,11 +272,39 @@ async def convert_word_to_pdf(docx_path, pdf_path):
     """Convert Word to PDF using LibreOffice"""
     try:
         output_dir = os.path.dirname(pdf_path)
-        soffice_path = subprocess.run(
-            ['which', 'soffice'],
-            capture_output=True,
-            text=True
-        ).stdout.strip() or '/nix/store/s77ki6j3if918jk373md4aajqii531rd-libreoffice-24.8.7.2-wrapped/bin/soffice'
+        
+        # LibreOffice yo'lini topish
+        soffice_paths = [
+            'soffice',  # System PATH da
+            '/usr/bin/soffice',  # Ubuntu/Debian
+            '/usr/local/bin/soffice',  # Local install
+            '/opt/libreoffice/program/soffice',  # LibreOffice
+            '/nix/store/s77ki6j3if918jk373md4aajqii531rd-libreoffice-24.8.7.2-wrapped/bin/soffice',  # Nix
+            '/app/.apt/usr/bin/soffice',  # Railway
+        ]
+        
+        soffice_path = None
+        for path in soffice_paths:
+            if os.path.exists(path) or path == 'soffice':
+                try:
+                    result = subprocess.run([path, '--version'], capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        soffice_path = path
+                        print(f"LibreOffice topildi: {path}")
+                        break
+                except:
+                    continue
+        
+        if not soffice_path:
+            print("LibreOffice topilmadi, python-docx2pdf ishlatamiz...")
+            # Alternative: python-docx2pdf
+            try:
+                from docx2pdf import convert
+                convert(docx_path, pdf_path)
+                return True
+            except ImportError:
+                print("docx2pdf ham mavjud emas, fallback...")
+                return False
         
         result = subprocess.run(
             [soffice_path, '--headless', '--convert-to', 'pdf', '--outdir', output_dir, docx_path],
@@ -617,11 +645,34 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await status_message.edit_text("⏳ DOC faylni DOCX ga o'zgartirish...")
                 converted_docx_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_converted.docx")
                 
-                soffice_path = subprocess.run(
-                    ['which', 'soffice'],
-                    capture_output=True,
-                    text=True
-                ).stdout.strip() or '/nix/store/s77ki6j3if918jk373md4aajqii531rd-libreoffice-24.8.7.2-wrapped/bin/soffice'
+                # LibreOffice yo'lini topish
+                soffice_paths = [
+                    'soffice',  # System PATH da
+                    '/usr/bin/soffice',  # Ubuntu/Debian
+                    '/usr/local/bin/soffice',  # Local install
+                    '/opt/libreoffice/program/soffice',  # LibreOffice
+                    '/nix/store/s77ki6j3if918jk373md4aajqii531rd-libreoffice-24.8.7.2-wrapped/bin/soffice',  # Nix
+                    '/app/.apt/usr/bin/soffice',  # Railway
+                ]
+                
+                soffice_path = None
+                for path in soffice_paths:
+                    if os.path.exists(path) or path == 'soffice':
+                        try:
+                            result = subprocess.run([path, '--version'], capture_output=True, text=True, timeout=5)
+                            if result.returncode == 0:
+                                soffice_path = path
+                                print(f"LibreOffice topildi: {path}")
+                                break
+                        except:
+                            continue
+                
+                if not soffice_path:
+                    await status_message.edit_text(
+                        "❌ LibreOffice topilmadi. DOC faylni DOCX ga o'zgartirish mumkin emas.",
+                        reply_markup=create_back_keyboard()
+                    )
+                    return
                 
                 result = subprocess.run(
                     [soffice_path, '--headless', '--convert-to', 'docx', '--outdir', UPLOAD_FOLDER, original_file_path],
