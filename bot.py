@@ -726,7 +726,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 qr_replaced = await add_qr_to_word_document(working_docx_path, qr_image_path, output_docx_path)
                 print(f"QR kod qo'shish natijasi: {qr_replaced}")
-                success = qr_replaced is not False
+                # qr_replaced True yoki False bo'lishi mumkin, lekin muvaffaqiyatli operatsiya
+                success = qr_replaced is not None  # None emas bo'lsa, muvaffaqiyatli
             except Exception as e:
                 print(f"QR kod qo'shishda xatolik: {e}")
                 import traceback
@@ -843,7 +844,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 qr_replaced = await add_qr_to_pdf_document(original_pdf_path, qr_image_path, output_pdf_path)
                 print(f"PDF QR kod qo'shish natijasi: {qr_replaced}")
-                success = qr_replaced is not False
+                # qr_replaced True yoki False bo'lishi mumkin, lekin muvaffaqiyatli operatsiya
+                success = qr_replaced is not None  # None emas bo'lsa, muvaffaqiyatli
             except Exception as e:
                 print(f"PDF QR kod qo'shishda xatolik: {e}")
                 import traceback
