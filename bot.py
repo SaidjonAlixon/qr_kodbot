@@ -391,7 +391,7 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
         
         # Save document
         doc.save(output_path)
-        return True
+        return qr_replaced  # qr_replaced ni qaytarish
     except Exception as e:
         logger.error(f"Word faylga QR qo'shish xatoligi: {e}")
         import traceback
@@ -454,7 +454,7 @@ async def add_qr_to_pdf_document(pdf_path, qr_image_path, output_path):
         # Save PDF
         pdf_document.save(output_path)
         pdf_document.close()
-        return True
+        return qr_replaced  # qr_replaced ni qaytarish
     except Exception as e:
         logger.error(f"PDF faylga QR qo'shish xatoligi: {e}")
         import traceback
@@ -714,7 +714,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             img.save(qr_image_path)
             
             # Add QR code to Word document
-            success = await add_qr_to_word_document(working_docx_path, qr_image_path, output_docx_path)
+            qr_replaced = await add_qr_to_word_document(working_docx_path, qr_image_path, output_docx_path)
+            success = qr_replaced is not False
             
             if success and os.path.exists(output_docx_path):
                 await status_message.edit_text("✅ QR kod muvaffaqiyatli qo'shildi!")
@@ -818,7 +819,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             img.save(qr_image_path)
             
             # Add QR code to PDF document
-            success = await add_qr_to_pdf_document(original_pdf_path, qr_image_path, output_pdf_path)
+            qr_replaced = await add_qr_to_pdf_document(original_pdf_path, qr_image_path, output_pdf_path)
+            success = qr_replaced is not False
             
             if success and os.path.exists(output_pdf_path):
                 await status_message.edit_text("✅ QR kod muvaffaqiyatli qo'shildi!")
