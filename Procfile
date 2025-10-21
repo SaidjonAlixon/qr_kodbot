@@ -1,1 +1,1 @@
-web: python test_url.py
+web: python bot.py
