@@ -74,27 +74,28 @@ def require_permission(func):
 
 def get_base_url():
     """Get the base URL for file hosting"""
+    # Railway da to'g'ridan-to'g'ri URL ni qaytarish
+    railway_domain = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+    print(f"RAILWAY_PUBLIC_DOMAIN: {railway_domain}")
     print(f"RAILWAY_URL: {RAILWAY_URL}")
-    print(f"REPLIT_URL: {REPLIT_URL}")
     
-    if RAILWAY_URL and RAILWAY_URL != 'None':
+    if railway_domain:
+        url = f"https://{railway_domain}"
+        print(f"Using Railway domain: {url}")
+        return url
+    
+    if RAILWAY_URL and RAILWAY_URL != 'None' and RAILWAY_URL != 'None':
         url = f"https://{RAILWAY_URL}"
         print(f"Using Railway URL: {url}")
         return url
-    elif REPLIT_URL and REPLIT_URL != 'None':
+    
+    if REPLIT_URL and REPLIT_URL != 'None':
         url = f"https://{REPLIT_URL}"
         print(f"Using Replit URL: {url}")
         return url
-    else:
-        # Railway da PORT environment variable dan URL olish
-        port = os.getenv('PORT', '5000')
-        railway_domain = os.getenv('RAILWAY_PUBLIC_DOMAIN')
-        if railway_domain:
-            url = f"https://{railway_domain}"
-            print(f"Using Railway domain: {url}")
-            return url
-        print("Using localhost fallback")
-        return "http://localhost:5000"
+    
+    print("Using localhost fallback")
+    return "http://localhost:5000"
 
 def create_main_keyboard():
     """Create main inline keyboard"""
