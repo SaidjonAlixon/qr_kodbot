@@ -297,25 +297,61 @@ async def convert_word_to_pdf(docx_path, pdf_path):
         return False
 
 async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
-    """Add QR code to Word document"""
+    """Add QR code to Word document, replace existing QR codes if found"""
     try:
         doc = Document(docx_path)
         
-        # Get last paragraph or create new one if document is empty
-        if len(doc.paragraphs) > 0:
-            # Add QR to the last existing paragraph (right side)
-            last_paragraph = doc.paragraphs[-1]
-            # Add tab to move to right side
-            last_paragraph.add_run('\t')
-            run = last_paragraph.add_run()
-            run.add_picture(qr_image_path, width=Inches(1), height=Inches(1))
-        else:
-            # If document is empty, create new paragraph
+        # Mavjud QR kodlarni topish va o'chirish
+        qr_replaced = False
+        
+        # Barcha paragraflarni tekshirish
+        for paragraph in doc.paragraphs:
+            # Paragrafdagi barcha runlarni tekshirish
+            for run in paragraph.runs:
+                # Agar run da rasm bo'lsa, uni o'chirish
+                if run._element.xpath('.//a:blip'):
+                    # Bu rasm, uni o'chirish
+                    run.clear()
+                    qr_replaced = True
+                    print("Mavjud rasm (QR kod) topildi va o'chirildi")
+        
+        # Jadval ichidagi QR kodlarni tekshirish
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            if run._element.xpath('.//a:blip'):
+                                run.clear()
+                                qr_replaced = True
+                                print("Jadval ichidagi mavjud rasm (QR kod) topildi va o'chirildi")
+        
+        # Yangi QR kod qo'shish
+        if qr_replaced:
+            print("Mavjud QR kod almashtirildi")
+            # Pastki o'ng burchakka qo'shish
             from docx.enum.text import WD_ALIGN_PARAGRAPH
             paragraph = doc.add_paragraph()
             paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             run = paragraph.add_run()
             run.add_picture(qr_image_path, width=Inches(1), height=Inches(1))
+        else:
+            print("Mavjud QR kod topilmadi, yangi qo'shildi")
+            # Agar mavjud QR kod topilmagan bo'lsa, oddiy usulda qo'shish
+            if len(doc.paragraphs) > 0:
+                # Add QR to the last existing paragraph (right side)
+                last_paragraph = doc.paragraphs[-1]
+                # Add tab to move to right side
+                last_paragraph.add_run('\t')
+                run = last_paragraph.add_run()
+                run.add_picture(qr_image_path, width=Inches(1), height=Inches(1))
+            else:
+                # If document is empty, create new paragraph
+                from docx.enum.text import WD_ALIGN_PARAGRAPH
+                paragraph = doc.add_paragraph()
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                run = paragraph.add_run()
+                run.add_picture(qr_image_path, width=Inches(1), height=Inches(1))
         
         # Add footer to the document (all sections)
         from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -330,13 +366,35 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
         return True
     except Exception as e:
         logger.error(f"Word faylga QR qo'shish xatoligi: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 async def add_qr_to_pdf_document(pdf_path, qr_image_path, output_path):
-    """Add QR code to PDF document"""
+    """Add QR code to PDF document, replace existing QR codes if found"""
     try:
         # Open PDF
         pdf_document = fitz.open(pdf_path)
+        
+        # Mavjud QR kodlarni topish va o'chirish
+        qr_replaced = False
+        
+        # Barcha sahifalarni tekshirish
+        for page_num in range(len(pdf_document)):
+            page = pdf_document[page_num]
+            
+            # Sahifadagi barcha rasmlarni topish
+            image_list = page.get_images()
+            for img_index, img in enumerate(image_list):
+                # Rasm o'lchamini tekshirish (QR kod odatda kvadrat bo'ladi)
+                xref = img[0]
+                pix = fitz.Pixmap(pdf_document, xref)
+                if pix.width == pix.height and pix.width <= 100:  # QR kod o'lchami
+                    # Bu QR kod bo'lishi mumkin, uni o'chirish
+                    page.delete_image(xref)
+                    qr_replaced = True
+                    print(f"Sahifa {page_num + 1} da mavjud QR kod topildi va o'chirildi")
+                pix = None
         
         # Get last page
         last_page = pdf_document[-1]
@@ -354,6 +412,11 @@ async def add_qr_to_pdf_document(pdf_path, qr_image_path, output_path):
         qr_rect = fitz.Rect(qr_x, qr_y, qr_x + qr_size, qr_y + qr_size)
         last_page.insert_image(qr_rect, filename=qr_image_path)
         
+        if qr_replaced:
+            print("Mavjud QR kod almashtirildi")
+        else:
+            print("Mavjud QR kod topilmadi, yangi qo'shildi")
+        
         # Add footer text
         footer_text = "DIDOX.UZ Orqali tasdiqlandi!"
         text_position = fitz.Point(page_width / 2, page_height - 5)
@@ -366,6 +429,8 @@ async def add_qr_to_pdf_document(pdf_path, qr_image_path, output_path):
         return True
     except Exception as e:
         logger.error(f"PDF faylga QR qo'shish xatoligi: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 @require_permission
@@ -623,11 +688,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"Failed to save QR to Word record: {e}")
                 
                 # Send document with QR code
+                caption_text = "✅ Word faylga QR kod qo'shildi!\n\n"
+                if qr_replaced:
+                    caption_text += "🔄 Mavjud QR kod almashtirildi!\n\n"
+                else:
+                    caption_text += "➕ Yangi QR kod qo'shildi!\n\n"
+                caption_text += f"📥 Yuklab olish: {file_url}\n🌐 Soliq.uz"
+                
                 with open(permanent_file_path, 'rb') as docx_file:
                     await message.reply_document(
                         document=docx_file,
                         filename=f"{os.path.splitext(document.file_name)[0]}_QR.docx",
-                        caption=f"✅ Word faylga QR kod qo'shildi!\n\n📥 Yuklab olish: {file_url}\n🌐 Soliq.uz",
+                        caption=caption_text,
                         reply_markup=create_back_keyboard()
                     )
                 context.user_data['convert_mode'] = None
@@ -720,11 +792,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"Failed to save QR to PDF record: {e}")
                 
                 # Send document with QR code
+                caption_text = "✅ PDF faylga QR kod qo'shildi!\n\n"
+                if qr_replaced:
+                    caption_text += "🔄 Mavjud QR kod almashtirildi!\n\n"
+                else:
+                    caption_text += "➕ Yangi QR kod qo'shildi!\n\n"
+                caption_text += f"📥 Yuklab olish: {file_url}\n🌐 Soliq.uz"
+                
                 with open(permanent_file_path, 'rb') as pdf_file:
                     await message.reply_document(
                         document=pdf_file,
                         filename=f"{os.path.splitext(document.file_name)[0]}_QR.pdf",
-                        caption=f"✅ PDF faylga QR kod qo'shildi!\n\n📥 Yuklab olish: {file_url}\n🌐 Soliq.uz",
+                        caption=caption_text,
                         reply_markup=create_back_keyboard()
                     )
                 context.user_data['convert_mode'] = None
