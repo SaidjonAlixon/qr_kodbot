@@ -23,7 +23,8 @@ from config import (
 # Import database functions
 from database import (
     add_or_update_user, is_user_allowed, set_user_permission,
-    get_all_users, add_file_record, get_all_files, get_stats
+    get_all_users, add_file_record, get_all_files, get_stats,
+    is_admin, add_admin, remove_admin, get_all_admins
 )
 
 logging.basicConfig(
@@ -36,12 +37,11 @@ logger = logging.getLogger(__name__)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(QR_FOLDER, exist_ok=True)
 
-# Admin ID from config
+# Admin ID from config (for backward compatibility)
 ADMIN_ID = ADMIN_TELEGRAM_ID
 
-def is_admin(user_id: int) -> bool:
-    """Check if user is admin"""
-    return user_id == ADMIN_ID
+# Note: is_admin() function is now imported from database module
+# This allows multiple admins to be managed through the database
 
 def require_permission(func):
     """Decorator to check if user has permission"""
@@ -334,27 +334,40 @@ async def add_qr_to_word_document(docx_path, qr_image_path, output_path):
         # Mavjud QR kodlarni topish va o'chirish
         qr_replaced = False
         
-        # Barcha paragraflarni tekshirish
-        for paragraph in doc.paragraphs:
-            # Paragrafdagi barcha runlarni tekshirish
-            for run in paragraph.runs:
-                # Agar run da rasm bo'lsa, uni o'chirish
-                if run._element.xpath('.//a:blip'):
-                    # Bu rasm, uni o'chirish
-                    run.clear()
-                    qr_replaced = True
-                    print("Mavjud rasm (QR kod) topildi va o'chirildi")
+        # Oddiy usul: Faqat rasm elementlarini o'chirish
+        print("Rasm elementlarini qidirish va o'chirish...")
         
-        # Jadval ichidagi QR kodlarni tekshirish
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        for run in paragraph.runs:
+        # Barcha paragraflardan rasm elementlarini o'chirish
+        for i, paragraph in enumerate(doc.paragraphs):
+            runs_to_remove = []
+            for j, run in enumerate(paragraph.runs):
+                if run._element.xpath('.//a:blip'):
+                    print(f"Paragraf {i}, run {j}: Rasm topildi va o'chirilmoqda...")
+                    runs_to_remove.append(j)
+                    qr_replaced = True
+            
+            # Rasm elementlarini teskari tartibda o'chirish
+            for j in reversed(runs_to_remove):
+                paragraph.runs[j].clear()
+        
+        # Barcha jadvallardan rasm elementlarini o'chirish
+        for table_idx, table in enumerate(doc.tables):
+            for row_idx, row in enumerate(table.rows):
+                for cell_idx, cell in enumerate(row.cells):
+                    for para_idx, paragraph in enumerate(cell.paragraphs):
+                        runs_to_remove = []
+                        for run_idx, run in enumerate(paragraph.runs):
                             if run._element.xpath('.//a:blip'):
-                                run.clear()
+                                print(f"Jadval {table_idx}, qator {row_idx}, katak {cell_idx}, paragraf {para_idx}, run {run_idx}: Rasm topildi va o'chirilmoqda...")
+                                runs_to_remove.append(run_idx)
                                 qr_replaced = True
-                                print("Jadval ichidagi mavjud rasm (QR kod) topildi va o'chirildi")
+                        
+                        # Rasm elementlarini teskari tartibda o'chirish
+                        for run_idx in reversed(runs_to_remove):
+                            paragraph.runs[run_idx].clear()
+        
+        print(f"Rasm o'chirish tugadi. qr_replaced: {qr_replaced}")
+        
         
         # Yangi QR kod qo'shish
         if qr_replaced:
@@ -1075,6 +1088,76 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Xatolik xabarini yuborishda muammo: {e}")
 
+async def add_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Add admin command - /add_admin <user_id> or reply to forwarded message"""
+    user_id = update.effective_user.id
+    
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Bu buyruq faqat admin uchun!")
+        return
+    
+    # Check if message is a reply to forwarded message
+    if update.message.reply_to_message and update.message.reply_to_message.forward_from:
+        target_user = update.message.reply_to_message.forward_from
+        target_user_id = target_user.id
+        target_username = target_user.username or "No username"
+        target_full_name = target_user.full_name or "No name"
+    elif context.args and context.args[0].isdigit():
+        # Admin ID provided as argument
+        target_user_id = int(context.args[0])
+        
+        # Try to get user info from database
+        users = get_all_users()
+        target_user_info = None
+        for user in users:
+            if user[0] == target_user_id:
+                target_user_info = user
+                break
+        
+        if not target_user_info:
+            # User not in database, create basic entry
+            target_username = "Unknown"
+            target_full_name = "Unknown User"
+            add_or_update_user(target_user_id, target_username, target_full_name)
+        else:
+            target_username = target_user_info[1] or "No username"
+            target_full_name = target_user_info[2] or "No name"
+    else:
+        await update.message.reply_text(
+            "❌ <b>Foydalanish:</b>\n\n"
+            "1️⃣ Foydalanuvchi xabarni forward qiling va unga javob bering: <code>/add_admin</code>\n"
+            "2️⃣ Yoki foydalanuvchi ID sini yuboring: <code>/add_admin 123456789</code>",
+            parse_mode='HTML'
+        )
+        return
+    
+    # Check if already admin
+    if is_admin(target_user_id):
+        await update.message.reply_text(f"ℹ️ <code>{target_user_id}</code> allaqachon admin!", parse_mode='HTML')
+        return
+    
+    # Add as admin
+    add_admin(target_user_id, target_username, target_full_name, user_id)
+    
+    await update.message.reply_text(
+        f"✅ <b>Admin qo'shildi!</b>\n\n"
+        f"👤 Foydalanuvchi: {target_full_name} (@{target_username})\n"
+        f"🆔 ID: <code>{target_user_id}</code>",
+        parse_mode='HTML'
+    )
+    
+    # Try to notify the new admin
+    try:
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text="👑 <b>Tabriklaymiz!</b>\n\n"
+                 "Sizga admin huquqi berildi.\n\n"
+                 "Admin panelni ochish uchun /admin buyrug'ini bosing.",
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        logger.error(f"Yangi admin'ga xabar yuborishda xato: {e}")
+
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin panel - only for admin"""
     user_id = update.effective_user.id
@@ -1089,18 +1172,54 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔱 <b>ADMIN PANEL</b>\n\n"
         f"👥 Jami foydalanuvchilar: {stats['total_users']}\n"
         f"✅ Ruxsat berilganlar: {stats['allowed_users']}\n"
+        f"👑 Jami adminlar: {stats['total_admins']}\n"
         f"📁 Jami fayllar: {stats['total_files']}\n"
         f"💾 Jami hajm: {stats['total_size'] / (1024*1024):.2f} MB\n\n"
         "Quyidagi amallardan birini tanlang:"
     )
     
     keyboard = [
+        [InlineKeyboardButton("👑 Adminlar", callback_data='admin_list')],
         [InlineKeyboardButton("👥 Foydalanuvchilar", callback_data='admin_users')],
         [InlineKeyboardButton("📂 Yuklangan fayllar", callback_data='admin_files')],
         [InlineKeyboardButton("◀️ Orqaga", callback_data='admin_close')]
     ]
     
     await update.message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+async def admin_list_admins(query, context):
+    """Show admins list for admin"""
+    admins = get_all_admins()
+    
+    if not admins:
+        await query.edit_message_text(
+            "👑 Adminlar ro'yxati bo'sh",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')]])
+        )
+        return
+    
+    text = "👑 <b>Adminlar ro'yxati:</b>\n\n"
+    keyboard = []
+    
+    for admin in admins:
+        admin_id_db, username, full_name, added_by, added_at = admin
+        is_current_user = admin_id_db == query.from_user.id
+        current_marker = " (siz)" if is_current_user else ""
+        text += f"👑 <code>{admin_id_db}</code> - {full_name} (@{username}){current_marker}\n"
+        
+        # Add button for each admin (can't remove yourself if you're the only admin)
+        if not is_current_user or len(admins) > 1:
+            button_text = f"❌ {full_name[:15]} o'chirish"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f'admin_remove_{admin_id_db}')])
+    
+    keyboard.append([InlineKeyboardButton("➕ Admin qo'shish", callback_data='admin_add')])
+    keyboard.append([InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')])
+    
+    await query.edit_message_text(
         text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='HTML'
@@ -1123,11 +1242,16 @@ async def admin_users_list(query, context):
     for user in users[:20]:  # Show first 20 users
         user_id_db, username, full_name, is_allowed, created_at = user
         status = "✅" if is_allowed else "❌"
-        text += f"{status} <code>{user_id_db}</code> - {full_name} (@{username})\n"
+        is_admin_user = is_admin(user_id_db)
+        admin_marker = " 👑" if is_admin_user else ""
+        text += f"{status} <code>{user_id_db}</code> - {full_name} (@{username}){admin_marker}\n"
         
         # Add button for each user
-        button_text = f"{'🔓' if is_allowed else '🔒'} {full_name[:15]}"
-        keyboard.append([InlineKeyboardButton(button_text, callback_data=f'admin_toggle_{user_id_db}')])
+        if not is_admin_user:
+            button_text = f"{'🔓' if is_allowed else '🔒'} {full_name[:15]}"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f'admin_toggle_{user_id_db}')])
+            # Add button to make user admin
+            keyboard.append([InlineKeyboardButton(f"👑 {full_name[:15]} ni admin qilish", callback_data=f'admin_add_user_{user_id_db}')])
     
     keyboard.append([InlineKeyboardButton("◀️ Orqaga", callback_data='admin_back')])
     
@@ -1148,7 +1272,10 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Ruxsat yo'q!")
         return
     
-    if query.data == 'admin_users':
+    if query.data == 'admin_list':
+        await admin_list_admins(query, context)
+    
+    elif query.data == 'admin_users':
         await admin_users_list(query, context)
     
     elif query.data == 'admin_files':
@@ -1303,6 +1430,91 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Go back to users list
         await admin_users_list(query, context)
     
+    elif query.data == 'admin_add':
+        # Show users list to add as admin
+        users = get_all_users()
+        
+        if not users:
+            await query.edit_message_text(
+                "👥 Foydalanuvchilar topilmadi.\n\n"
+                "Admin qo'shish uchun quyidagi usullardan birini tanlang:\n\n"
+                "1️⃣ Foydalanuvchi xabarni forward qiling va javob bering: <code>/add_admin</code>\n"
+                "2️⃣ Yoki foydalanuvchi ID sini yuboring: <code>/add_admin 123456789</code>",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data='admin_list')]]),
+                parse_mode='HTML'
+            )
+            return
+        
+        text = "👑 <b>Admin qo'shish - Foydalanuvchini tanlang:</b>\n\n"
+        keyboard = []
+        
+        # Show users who are not admins
+        non_admin_users = [u for u in users[:15] if not is_admin(u[0])]
+        
+        if not non_admin_users:
+            text += "⚠️ Barcha foydalanuvchilar allaqachon admin!"
+        else:
+            for user in non_admin_users:
+                user_id_db, username, full_name, is_allowed, created_at = user
+                text += f"👤 <code>{user_id_db}</code> - {full_name} (@{username})\n"
+                button_text = f"➕ {full_name[:20]} ni admin qilish"
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=f'admin_add_user_{user_id_db}')])
+        
+        keyboard.append([InlineKeyboardButton("◀️ Orqaga", callback_data='admin_list')])
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='HTML'
+        )
+    
+    elif query.data.startswith('admin_add_user_'):
+        # Add admin from user list
+        target_user_id = int(query.data.split('_')[3])
+        
+        # Get user info
+        users = get_all_users()
+        user_info = None
+        for user in users:
+            if user[0] == target_user_id:
+                user_info = user
+                break
+        
+        if not user_info:
+            await query.answer("❌ Foydalanuvchi topilmadi!", show_alert=True)
+            return
+        
+        user_id_db, username, full_name, is_allowed, created_at = user_info
+        
+        # Check if already admin
+        if is_admin(user_id_db):
+            await query.answer("ℹ️ Bu foydalanuvchi allaqachon admin!", show_alert=True)
+            await admin_list_admins(query, context)
+            return
+        
+        # Add as admin
+        add_admin(user_id_db, username, full_name, user_id)
+        
+        await query.answer("✅ Admin qo'shildi!", show_alert=True)
+        await admin_list_admins(query, context)
+    
+    elif query.data.startswith('admin_remove_'):
+        # Remove admin
+        target_user_id = int(query.data.split('_')[2])
+        
+        # Don't allow removing yourself if you're the only admin
+        admins = get_all_admins()
+        if len(admins) <= 1 and target_user_id == user_id:
+            await query.answer("❌ Oxirgi adminni o'chirib bo'lmaydi!", show_alert=True)
+            await admin_list_admins(query, context)
+            return
+        
+        # Remove admin
+        remove_admin(target_user_id)
+        
+        await query.answer("✅ Admin o'chirildi!", show_alert=True)
+        await admin_list_admins(query, context)
+    
     elif query.data == 'admin_back':
         stats = get_stats()
         
@@ -1310,12 +1522,14 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔱 <b>ADMIN PANEL</b>\n\n"
             f"👥 Jami foydalanuvchilar: {stats['total_users']}\n"
             f"✅ Ruxsat berilganlar: {stats['allowed_users']}\n"
+            f"👑 Jami adminlar: {stats['total_admins']}\n"
             f"📁 Jami fayllar: {stats['total_files']}\n"
             f"💾 Jami hajm: {stats['total_size'] / (1024*1024):.2f} MB\n\n"
             "Quyidagi amallardan birini tanlang:"
         )
         
         keyboard = [
+            [InlineKeyboardButton("👑 Adminlar", callback_data='admin_list')],
             [InlineKeyboardButton("👥 Foydalanuvchilar", callback_data='admin_users')],
             [InlineKeyboardButton("📂 Yuklangan fayllar", callback_data='admin_files')],
             [InlineKeyboardButton("◀️ Yopish", callback_data='admin_close')]
@@ -1369,6 +1583,7 @@ def main():
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("admin", admin_panel))
+    application.add_handler(CommandHandler("add_admin", add_admin_command))
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))

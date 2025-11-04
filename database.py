@@ -22,6 +22,18 @@ def init_database():
         )
     ''')
     
+    # Admins table - track bot admins
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS admins (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            full_name TEXT,
+            added_by INTEGER,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
     # Files table - track all uploaded files
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS files (
@@ -51,6 +63,23 @@ def init_database():
             print("✅ Migration: Added service_used column to files table")
     except Exception as e:
         print(f"⚠️ Migration warning: {e}")
+    
+    # Migration: Add initial admin from config if admins table is empty
+    try:
+        from config import ADMIN_TELEGRAM_ID
+        cursor.execute('SELECT COUNT(*) FROM admins')
+        admin_count = cursor.fetchone()[0]
+        
+        if admin_count == 0 and ADMIN_TELEGRAM_ID and ADMIN_TELEGRAM_ID != 0:
+            # Add initial admin from config
+            cursor.execute('''
+                INSERT OR IGNORE INTO admins (user_id, username, full_name, added_by)
+                VALUES (?, ?, ?, ?)
+            ''', (ADMIN_TELEGRAM_ID, 'Initial Admin', 'Initial Admin', ADMIN_TELEGRAM_ID))
+            conn.commit()
+            print(f"✅ Migration: Added initial admin {ADMIN_TELEGRAM_ID} from config")
+    except Exception as e:
+        print(f"⚠️ Migration warning for admins: {e}")
     
     conn.commit()
     conn.close()
@@ -159,6 +188,59 @@ def get_user_files(user_id: int) -> List[Tuple]:
     
     return files
 
+def is_admin(user_id: int) -> bool:
+    """Check if user is admin"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM admins WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()[0]
+    conn.close()
+    
+    return result > 0
+
+def add_admin(user_id: int, username: str, full_name: str, added_by: int):
+    """Add admin to database"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    # First ensure user exists in users table
+    add_or_update_user(user_id, username, full_name)
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO admins (user_id, username, full_name, added_by)
+        VALUES (?, ?, ?, ?)
+    ''', (user_id, username, full_name, added_by))
+    
+    conn.commit()
+    conn.close()
+
+def remove_admin(user_id: int):
+    """Remove admin from database"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM admins WHERE user_id = ?', (user_id,))
+    
+    conn.commit()
+    conn.close()
+
+def get_all_admins() -> List[Tuple]:
+    """Get all admins from database"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT user_id, username, full_name, added_by, added_at 
+        FROM admins 
+        ORDER BY added_at DESC
+    ''')
+    
+    admins = cursor.fetchall()
+    conn.close()
+    
+    return admins
+
 def get_stats() -> dict:
     """Get database statistics"""
     conn = sqlite3.connect(DB_FILE)
@@ -176,13 +258,17 @@ def get_stats() -> dict:
     cursor.execute('SELECT SUM(file_size) FROM files')
     total_size = cursor.fetchone()[0] or 0
     
+    cursor.execute('SELECT COUNT(*) FROM admins')
+    total_admins = cursor.fetchone()[0]
+    
     conn.close()
     
     return {
         'total_users': total_users,
         'allowed_users': allowed_users,
         'total_files': total_files,
-        'total_size': total_size
+        'total_size': total_size,
+        'total_admins': total_admins
     }
 
 # Initialize database on import
